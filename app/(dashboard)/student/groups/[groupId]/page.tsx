@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Users, Crown, Pencil, UserMinus, UserPlus, Lock, Unlock } from "lucide-react"
-import { getCurrentUser } from "@/lib/utils/auth"
+import { getCurrentUser, getUserIdFromJWT, updateCurrentUser } from "@/lib/utils/auth"
 import { GroupService } from "@/lib/api/groupService"
 import { GroupMemberService } from "@/lib/api/generated/services/GroupMemberService"
 import { TopicService } from "@/lib/api/generated/services/TopicService"
@@ -26,6 +26,8 @@ export default function StudentGroupDetailPage() {
   const [topicOpen, setTopicOpen] = React.useState(false)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [leaveOpen, setLeaveOpen] = React.useState(false)
+  const [kickOpen, setKickOpen] = React.useState(false)
+  const [kickMember, setKickMember] = React.useState<any>(null)
   const [topics, setTopics] = React.useState<any[]>([])
   const [topicName, setTopicName] = React.useState("")
   const [topicDesc, setTopicDesc] = React.useState("")
@@ -37,22 +39,76 @@ export default function StudentGroupDetailPage() {
 
   const isLeader = React.useMemo(() => {
     const uid = user?.userId || user?.id
-    return Boolean(uid && group?.leaderId && String(group.leaderId) === String(uid))
+    const leaderId = group?.leaderId
+    const isLeaderCheck = Boolean(uid && leaderId && String(leaderId) === String(uid))
+
+    // Alternative check: check if user has roleInGroup = 'leader' in members list
+    const isLeaderByRole = group?.members?.some((m: any) =>
+      String(m.userId) === String(uid) && String(m.roleInGroup || m.role || '').toLowerCase() === 'leader'
+    ) || false
+
+    const finalIsLeader = isLeaderCheck || isLeaderByRole
+
+    console.log("👑 [isLeader] Check:", {
+      uid,
+      leaderId,
+      isLeaderCheck,
+      isLeaderByRole,
+      finalIsLeader,
+      groupLeaderId: group?.leaderId
+    })
+    return finalIsLeader
   }, [user, group])
 
   async function loadGroup() {
     setLoading(true)
     try {
-      const g = await GroupService.getGroupById(groupId)
-      setGroup(g)
+      // Try to get group by current user ID first (will have fullName in members)
+      let g = null;
+      if (user?.userId) {
+        try {
+          console.log("🔍 [loadGroup] Trying to get group by current userId:", user.userId);
+          g = await GroupService.getGroupByStudentId(user.userId);
+          console.log("✅ [loadGroup] Got group with full member info");
+        } catch (error) {
+          console.warn("⚠️ [loadGroup] Could not get group by userId, falling back to groupId:", error);
+        }
+      }
+
+      // Fallback to getGroupById if above failed or group doesn't match
+      if (!g || g.groupId !== groupId) {
+        console.log("🔄 [loadGroup] Falling back to getGroupById:", groupId);
+        g = await GroupService.getGroupById(groupId);
+      }
+
+      if (g) {
+        console.log("📊 [loadGroup] Group loaded:", {
+          groupId: g.groupId,
+          leaderId: g.leaderId,
+          members: g.members?.map(m => ({
+            fullName: m.fullName,
+            userId: m.userId,
+            role: m.role,
+            roleInGroup: m.roleInGroup,
+            memberId: m.memberId
+          }))
+        });
+      }
+      setGroup(g);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   React.useEffect(() => {
     const u = getCurrentUser()
     if (!u || u.role !== "student") { router.push("/login"); return }
+    console.log("👤 [useEffect] Current user:", {
+      userId: u.userId,
+      email: u.email,
+      fullName: u.fullName,
+      role: u.role
+    });
     setUser(u)
     if (groupId) loadGroup()
   }, [groupId])
@@ -75,14 +131,42 @@ export default function StudentGroupDetailPage() {
     await loadGroup()
   }
 
-  async function handleKick(member: any) {
-    if (!isLeader) return
-    const membershipId = member?.memberId
-    if (!membershipId) return
+  async function handleKick() {
+    if (!isLeader || !kickMember) return
+
+    const member = kickMember
+    setKickOpen(false)
+
+    const memberUserId = member?.userId
+    console.log("🚀 [handleKick] Attempting to kick member:", member.fullName, "with userId:", memberUserId);
+
+    if (!memberUserId || !groupId) {
+      console.warn("❌ [handleKick] Missing member userId or groupId:", { memberUserId, groupId });
+      return
+    }
+
     try {
-      await GroupMemberService.deleteApiGroupMember({ id: membershipId })
+      // Use direct API call to delete group member by userId
+      console.log("🔍 [handleKick] Calling DELETE /api/GroupMember/{userId}");
+      const response = await fetch(`/api/proxy/api/GroupMember/${memberUserId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`Delete failed: ${response.status} ${response.statusText} ${errorText}`);
+      }
+
+      console.log("✅ [handleKick] Successfully kicked member");
+      setKickMember(null)
       await loadGroup()
-    } catch {}
+    } catch (error) {
+      console.error("❌ [handleKick] Failed to kick member:", error);
+      setKickMember(null)
+    }
   }
 
   async function searchCandidates() {
@@ -108,9 +192,21 @@ export default function StudentGroupDetailPage() {
   }
 
   async function handleLeave() {
-    if (!user?.userId || !groupId) { setLeaveOpen(false); return }
+    const userIdToUse = getUserIdFromJWT() || user?.userId;
+    if (!userIdToUse || !groupId) { setLeaveOpen(false); return }
     try {
-      await GroupService.leaveGroup(groupId, user.userId)
+      await GroupService.leaveGroup(groupId, userIdToUse)
+
+      // Clear groupId from user state after successful leave
+      if (user) {
+        const updatedUser = { ...user, groupId: null };
+        updateCurrentUser(updatedUser);
+        console.log("✅ [handleLeave] Cleared groupId from user state");
+
+        // Dispatch event to notify other components about user state change
+        window.dispatchEvent(new CustomEvent('userStateChanged'));
+      }
+
       setLeaveOpen(false)
       router.push("/student/group")
     } catch { setLeaveOpen(false) }
@@ -190,17 +286,47 @@ export default function StudentGroupDetailPage() {
                               <div className="flex items-center gap-2">
                                 <img src={m.avatarUrl || '/placeholder-user.jpg'} className="w-8 h-8 rounded-full" alt="avatar" />
                                 <div>
-                                  <div className="font-medium flex items-center gap-1">{m.fullName}{m.role === 'leader' ? <Crown className="w-4 h-4 text-amber-500" /> : null}</div>
-                                  <div className="text-xs text-gray-600">{m.userId}</div>
+                                  <div className="font-medium flex items-center gap-1">{m.fullName}{String(m.roleInGroup || m.role || '').toLowerCase() === 'leader' ? <Crown className="w-4 h-4 text-amber-500" /> : null}</div>
                                 </div>
                               </div>
                             </TableCell>
                             <TableCell>{m.major}</TableCell>
-                            <TableCell>{m.role}</TableCell>
+                            <TableCell>{m.roleInGroup || m.role}</TableCell>
                             <TableCell className="text-right">
-                              {isLeader && m.role !== 'leader' ? (
-                                <Button size="sm" variant="destructive" onClick={() => handleKick(m)}><UserMinus className="w-4 h-4 mr-1" /> Kick</Button>
-                              ) : null}
+                              {(() => {
+                                const memberRoleInGroup = String(m.roleInGroup || m.role || '').toLowerCase();
+                                const isMemberLeader = memberRoleInGroup === 'leader';
+                                const memberUserId = String(m.userId || '');
+                                const currentUserId = String(user?.userId || '');
+                                const isCurrentUser = memberUserId === currentUserId;
+
+                                const shouldShowKick = isLeader && !isMemberLeader && !isCurrentUser;
+
+                                console.log("🔍 [Kick Button] Member:", m.fullName, {
+                                  isLeader,
+                                  memberRoleInGroup: m.roleInGroup,
+                                  memberRole: m.role,
+                                  memberRoleInGroupLower: memberRoleInGroup,
+                                  isMemberLeader,
+                                  memberUserId,
+                                  currentUserId,
+                                  isCurrentUser,
+                                  shouldShowKick
+                                });
+
+                                return shouldShowKick ? (
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => {
+                                      setKickMember(m)
+                                      setKickOpen(true)
+                                    }}
+                                  >
+                                    <UserMinus className="w-4 h-4 mr-1" /> Kick
+                                  </Button>
+                                ) : null;
+                              })()}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -234,6 +360,11 @@ export default function StudentGroupDetailPage() {
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
+                {isLeader && (group?.memberCount || 0) < (group?.maxMembers || 0) ? (
+                  <Button variant="outline" onClick={() => { setInviteOpen(true); setCandidates([]); setInviteQuery("") }}>
+                    <UserPlus className="w-4 h-4 mr-2" /> Mời thành viên
+                  </Button>
+                ) : null}
                 <Button variant="destructive" onClick={() => setLeaveOpen(true)}>Rời nhóm</Button>
               </CardContent>
             </Card>
@@ -290,6 +421,21 @@ export default function StudentGroupDetailPage() {
             <AlertDialogFooter>
               <AlertDialogCancel>Huỷ</AlertDialogCancel>
               <AlertDialogAction onClick={handleLeave}>Xác nhận</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={kickOpen} onOpenChange={setKickOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Kick thành viên?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Bạn có chắc muốn kick {kickMember?.fullName} khỏi nhóm không? Hành động này không thể hoàn tác.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setKickMember(null)}>Huỷ</AlertDialogCancel>
+              <AlertDialogAction onClick={handleKick}>Xác nhận kick</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

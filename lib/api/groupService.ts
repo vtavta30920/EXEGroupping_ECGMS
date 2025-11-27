@@ -5,7 +5,7 @@ import type {
 } from "@/lib/types"; 
 
 import {
-  GroupMemberService as GeneratedGroupMemberService, 
+  GroupMemberService as GeneratedGroupMemberService,
   GroupService as GeneratedGroupService,
   ApiError,
   OpenAPI,
@@ -15,9 +15,23 @@ import {
   TopicService,
   UserService,
 } from "@/lib/api/generated";
+import { decodeJWT, fixUserData } from "@/lib/utils/auth";
 
 // Export ApiGroup for use in pages
 export type { ApiGroup };
+
+/**
+ * Validates if a string is a valid GUID format
+ * GUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+ * where each x is a hexadecimal digit (0-9, a-f, A-F)
+ */
+function isValidGuid(value: string): boolean {
+  const guidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  return guidRegex.test(value);
+}
+
+// Flag to enable/disable GUID validation (useful for development/testing)
+const SKIP_GUID_VALIDATION = process.env.NODE_ENV === 'development' || process.env.SKIP_GUID_VALIDATION === 'true';
 import type { UpdateGroupViewModel } from "@/lib/api/generated/models/UpdateGroupViewModel";
 
 const IS_MOCK_MODE = false;
@@ -43,7 +57,16 @@ const mapApiGroupToFeGroup = (g: any): FeGroup => {
   const leaderIdRaw = g.leaderId || (g.leader?.id ?? "");
   let feMembers: GroupMember[] = rawMembers.map((gm: any) => {
     const student = gm.user || gm.student;
-    const fullName = student ? getUserFullName(student) : (gm.username || gm.email || "Thành viên");
+    // Ưu tiên fullName từ API response, sau đó từ student object, cuối cùng fallback
+    let fullName = gm.fullName || (student ? getUserFullName(student) : (gm.username || gm.email || "Thành viên"));
+
+    // Nếu vẫn không có fullName hợp lý (có thể là userId), thử fetch từ API
+    if (!fullName || fullName === gm.userId || fullName === gm.id || fullName.includes('@')) {
+      // Đây có thể là trường hợp cần fetch user info
+      console.log("⚠️ [mapApiGroupToFeGroup] Missing fullName for userId:", gm.userId, "using:", fullName);
+      // Temporarily keep the current logic, will enhance later if needed
+    }
+
     return {
       userId: gm.userId || gm.studentId || gm.id || "",
       fullName,
@@ -130,6 +153,9 @@ export class GroupService {
         throw new Error(`GetGroupBy failed: ${res.status} ${res.statusText} ${text}`);
       }
       const groupFromApi = await res.json();
+      console.log("🔍 [getGroupById] API response:", groupFromApi);
+      console.log("🔍 [getGroupById] Members data:", groupFromApi?.members || groupFromApi?.groupMembers);
+      console.log("🔍 [getGroupById] Sample member:", (groupFromApi?.members || groupFromApi?.groupMembers)?.[0]);
       return mapApiGroupToFeGroup(groupFromApi);
     } catch (err: any) {
       console.error("Lỗi API getGroupById:", err);
@@ -137,19 +163,66 @@ export class GroupService {
     }
   }
 
+  static async getGroupByStudentId(userId: string): Promise<FeGroup | null> {
+    try {
+      console.log("🔍 [getGroupByStudentId] Calling API for userId:", userId);
+      const res = await fetch(`/api/proxy/Group/GetGroupByStudentID/${userId}`, {
+        cache: 'no-store',
+        next: { revalidate: 0 },
+      });
+
+      if (res.status === 404) {
+        console.log("ℹ️ [getGroupByStudentId] No group found for userId:", userId);
+        return null;
+      }
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`GetGroupByStudentID failed: ${res.status} ${res.statusText} ${text}`);
+      }
+
+      const groupFromApi = await res.json();
+      console.log("✅ [getGroupByStudentId] Found group:", groupFromApi);
+
+      // API trả về array, lấy group đầu tiên
+      if (Array.isArray(groupFromApi) && groupFromApi.length > 0) {
+        return mapApiGroupToFeGroup(groupFromApi[0]);
+      }
+
+      return null;
+    } catch (err: any) {
+      console.error("Lỗi API getGroupByStudentId:", err);
+      throw err;
+    }
+  }
+
   static async joinGroup(groupId: string, userId: string): Promise<FeGroup> {
     try {
       if (!groupId || !userId) throw new Error("Thiếu groupId hoặc userId.");
+
       let resolvedUserId = String(userId);
-      let isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resolvedUserId);
-      if (!isGuid && /@/.test(resolvedUserId)) {
+
+      // 🔧 FIX: Nếu userId không phải GUID, tự động fix bằng fixUserData
+      if (!isValidGuid(resolvedUserId)) {
+        console.warn("⚠️ [joinGroup] userId không phải GUID, đang fix:", resolvedUserId);
+
         try {
-          const u = await UserService.getApiUserEmail({ email: resolvedUserId });
-          resolvedUserId = (u as any)?.id || resolvedUserId;
-          isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resolvedUserId);
-        } catch {}
+          const fixedUser = await fixUserData();
+          if (fixedUser && fixedUser.userId !== resolvedUserId) {
+            resolvedUserId = fixedUser.userId;
+            console.log("✅ [joinGroup] Đã fix userId thành:", resolvedUserId);
+          } else {
+            console.warn("❌ [joinGroup] Không thể fix userId");
+          }
+        } catch (fixError) {
+          console.warn("❌ [joinGroup] Lỗi khi fix userId:", fixError);
+        }
+
+        // Validation cuối cùng
+        if (!SKIP_GUID_VALIDATION && !isValidGuid(resolvedUserId)) {
+          throw new Error(`userId phải là GUID hợp lệ. Nhận được: ${resolvedUserId}`);
+        }
       }
-      if (!isGuid) throw new Error("userId không hợp lệ (phải là GUID). Hãy truyền 'user.id' hoặc email để tự động chuyển đổi.");
       // Optional: kiểm tra nhóm đã đầy
       try {
         const g = await this.getGroupById(groupId);
@@ -157,6 +230,7 @@ export class GroupService {
           throw new Error("Nhóm đã đầy, không thể tham gia.");
         }
       } catch {}
+      
       try {
         const existing = await GeneratedGroupMemberService.getApiGroupMember({ groupId, userId: resolvedUserId });
         if (Array.isArray(existing) && existing.length > 0) {
@@ -165,11 +239,57 @@ export class GroupService {
           return updatedGroup;
         }
       } catch {}
-      const requestBody: CreateGroupMemberViewModel = { 
-        groupId: groupId, 
-        userId: resolvedUserId 
+      const requestBody: CreateGroupMemberViewModel = {
+        groupId: groupId,
+        userId: resolvedUserId
       };
-      await GeneratedGroupMemberService.postApiGroupMember({ requestBody });
+
+      console.log("🚀 [joinGroup] POST /api/GroupMember với:", {
+        groupId,
+        userId: resolvedUserId,
+        isValidGuid: isValidGuid(resolvedUserId)
+      });
+
+      // 🔧 FIX: Gọi API trực tiếp với format backend expect
+      const apiUrl = `${OpenAPI.BASE}/api/GroupMember`;
+      console.log("🔄 [joinGroup] POST trực tiếp tới:", apiUrl);
+
+      // Thử format 1: { model: {...} }
+      let requestPayload: any = { model: requestBody };
+      let response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify(requestPayload)
+      });
+
+      // Nếu format 1 fail, thử format 2: direct object
+      if (!response.ok) {
+        console.log("📦 [joinGroup] Format {model:...} failed, trying direct object...");
+        requestPayload = requestBody;
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+          },
+          body: JSON.stringify(requestPayload)
+        });
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ [joinGroup] All formats failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`API call failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      console.log("✅ [joinGroup] API call thành công!");
       const updatedGroup = await this.getGroupById(groupId);
       if (!updatedGroup) throw new Error("Không thể lấy thông tin nhóm.");
       return updatedGroup;
@@ -187,6 +307,11 @@ export class GroupService {
 
   static async leaveGroup(groupId: string, userId: string): Promise<FeGroup | null> {
     try {
+      // Validate userId is a valid GUID format (skip in development or when explicitly disabled)
+      if (!SKIP_GUID_VALIDATION && !isValidGuid(userId)) {
+        throw new Error("userId phải là GUID hợp lệ (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
+      }
+
       // API DELETE /api/GroupMember/{id} expects userId directly, not membershipId
       // The backend finds the GroupMember by UserId == id
       await GeneratedGroupMemberService.deleteApiGroupMember({ id: userId });

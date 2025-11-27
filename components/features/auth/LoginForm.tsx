@@ -70,13 +70,41 @@ export function LoginForm() {
         throw new Error('Chỉ sinh viên (Student) được phép đăng nhập')
       }
 
+      // 🔧 FIX: Validate userId must be GUID, not email
+      const rawUserId = rawUser?.id ?? '';
+      const guidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+      console.log('🔍 [LoginForm] Raw user ID:', rawUserId);
+      console.log('🔍 [LoginForm] Is userId a GUID?', guidRegex.test(rawUserId));
+
+      if (!guidRegex.test(rawUserId)) {
+        console.warn('⚠️ [LoginForm] User ID from API is not a GUID:', rawUserId);
+        throw new Error('User ID từ server không đúng định dạng GUID. Vui lòng liên hệ admin.');
+      }
+
+      // Get latest group info from API
+      let groupId = null;
+      try {
+        console.log('🔍 [LoginForm] Fetching group info for userId:', rawUserId);
+        const GroupService = (await import('@/lib/api/groupService')).GroupService;
+        const groupData = await GroupService.getGroupByStudentId(rawUserId);
+        groupId = groupData?.groupId || null;
+        console.log('✅ [LoginForm] Found groupId from API:', groupId);
+      } catch (groupError) {
+        console.warn('⚠️ [LoginForm] Could not fetch group info:', groupError);
+        // Fallback to existing data
+        const existingUserData = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        groupId = existingUserData.groupId || null;
+        console.log('🔄 [LoginForm] Using fallback groupId from localStorage:', groupId);
+      }
+
       const normalized = {
-        userId: rawUser?.id ?? '',
+        userId: rawUserId,
         username: rawUser?.username || rawUser?.email || email,
         fullName: rawUser?.userProfile?.fullName || rawUser?.username || rawUser?.email || email,
         email: rawUser?.email || email,
         role: 'student',
-        groupId: rawUser?.groups?.[0]?.id || rawUser?.groupMembers?.[0]?.groupId || null,
+        groupId: groupId,
         roleId: rawUser?.roleId,
         skillSet: (rawUser?.skillSet ?? undefined) as any,
         userProfile: rawUser?.userProfile as any,
@@ -84,6 +112,10 @@ export function LoginForm() {
         groups: (rawUser?.groups ?? undefined) as any[],
         notifications: (rawUser?.notifications ?? undefined) as any[],
       }
+
+      console.log('✅ [LoginForm] Final normalized user with groupId:', normalized.groupId);
+
+      console.log('✅ [LoginForm] Normalized userId:', normalized.userId);
 
       try {
         localStorage.setItem('currentUser', JSON.stringify(normalized))

@@ -20,12 +20,49 @@ import { getCourses as getCoursesMock } from "@/lib/mock-data/courses";
 // Đã bỏ ImportCard và logic XLSX tại đây; chuyển sang Dialog
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { mockUsers } from "@/lib/mock-data/auth"
+import { getUserIdFromJWT } from "@/lib/utils/auth"
 import { mockGroups } from "@/lib/mock-data/groups"
 import { EditGroupDialog } from "@/components/features/group/EditGroupDialog"
 import { LecturerCourseService, UserService } from "@/lib/api/generated"
 import { GroupMemberService as GeneratedGroupMemberService } from "@/lib/api/generated/services/GroupMemberService"
 import { Badge } from "@/components/ui/badge"
 import { Shuffle } from "lucide-react"
+
+// Helper function to fix student userId (convert email to GUID if needed)
+async function fixStudentUserId(rawUid: any, email?: string): Promise<string | null> {
+  if (!rawUid) return null;
+
+  const uid = String(rawUid);
+  const guidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+  // If already a GUID, return as is
+  if (guidRegex.test(uid)) {
+    return uid;
+  }
+
+  // If it's an email and we have email, try to get userId from API
+  if (email && uid.includes('@')) {
+    try {
+      console.log(`🔄 [fixStudentUserId] Converting email to GUID: ${email}`);
+      const res = await fetch(`/api/proxy/api/User/email/${encodeURIComponent(email)}`, {
+        cache: 'no-store',
+        headers: { accept: 'text/plain' }
+      });
+      if (res.ok) {
+        const userData = await res.json();
+        if (userData?.id && guidRegex.test(userData.id)) {
+          console.log(`✅ [fixStudentUserId] Found GUID: ${userData.id}`);
+          return userData.id;
+        }
+      }
+    } catch (error) {
+      console.warn(`❌ [fixStudentUserId] Failed to convert email to GUID:`, error);
+    }
+  }
+
+  // Return original uid if can't fix
+  return uid;
+}
 
 export default function AdminGroupsPage() {
   const { toast } = useToast()
@@ -384,24 +421,36 @@ export default function AdminGroupsPage() {
                     }
                     // Xác định sinh viên đã ở bất kỳ nhóm nào của course hiện tại
                     const occupiedUserIds = new Set<string>()
-                    groups.filter(g => g.courseCode === selectedCourseCode).forEach(g => {
+                    for (const g of groups.filter(g => g.courseCode === selectedCourseCode)) {
                       const ms = Array.isArray(g.members) ? g.members : []
-                      ms.forEach((m: any) => { const uid = m?.userId || m?.studentId || m?.id; if (uid) occupiedUserIds.add(String(uid)) })
-                    })
+                      for (const m of ms) {
+                        const rawUid = (m as any)?.userId || (m as any)?.studentId || (m as any)?.id;
+                        const uid = await fixStudentUserId(rawUid, (m as any)?.email);
+                        if (uid) occupiedUserIds.add(uid);
+                      }
+                    }
                     // Ưu tiên lọc theo course nếu dữ liệu có studentCourses; nếu không, lấy tất cả từ UserWithoutGroup
-                    let freeStudents = students.filter((s: any) => {
-                      const uid = s?.id || s?.userId
-                      const alreadyInGroup = uid ? occupiedUserIds.has(String(uid)) : false
-                      const hasCourseInfo = Array.isArray(s?.studentCourses)
-                      const inCourse = hasCourseInfo ? s.studentCourses.some((sc: any) => (sc?.course?.courseCode || sc?.courseCode) === selectedCourseCode || sc?.courseId === selectedCourseId) : true
-                      return inCourse && !alreadyInGroup
-                    })
+                    let freeStudents = []
+                    for (const s of students) {
+                      const rawUid = s?.id || s?.userId;
+                      const uid = await fixStudentUserId(rawUid, s?.email);
+                      const alreadyInGroup = uid ? occupiedUserIds.has(uid) : false;
+                      const hasCourseInfo = Array.isArray(s?.studentCourses);
+                      const inCourse = hasCourseInfo ? s.studentCourses.some((sc: any) => (sc?.course?.courseCode || sc?.courseCode) === selectedCourseCode || sc?.courseId === selectedCourseId) : true;
+                      if (inCourse && !alreadyInGroup) {
+                        freeStudents.push(s);
+                      }
+                    }
+
                     // Nếu sau khi lọc theo course không có sinh viên, fallback dùng toàn bộ danh sách từ UserWithoutGroup
                     if (freeStudents.length === 0) {
-                      freeStudents = students.filter((s: any) => {
-                        const uid = s?.id || s?.userId
-                        return uid ? !occupiedUserIds.has(String(uid)) : false
-                      })
+                      for (const s of students) {
+                        const rawUid = s?.id || s?.userId;
+                        const uid = await fixStudentUserId(rawUid, s?.email);
+                        if (uid && !occupiedUserIds.has(uid)) {
+                          freeStudents.push(s);
+                        }
+                      }
                     }
                     const targetGroups = groups.filter(g => g.courseCode === selectedCourseCode && (g.memberCount === 0))
                     if (freeStudents.length === 0 || targetGroups.length === 0) { toast({ title: "Không thể phân bổ", description: "Không có sinh viên lẻ hoặc không có nhóm cần bổ sung." }); return }
@@ -415,9 +464,9 @@ export default function AdminGroupsPage() {
                       let current = g.memberCount || 0
                       const max = g.maxMembers || 5
                       // Vòng 1: cân bằng theo major
-                      for (const mk of majorKeys) { if (current >= max) break; const s = majors[mk].pop(); if (s) { const uid = s?.user?.id || s?.userId || s?.id || s?.user?.userId || s?.studentId; if (uid) { plan[gid].push(String(uid)); current++ } } }
+                      for (const mk of majorKeys) { if (current >= max) break; const s = majors[mk].pop(); if (s) { const rawUid = s?.user?.id || s?.userId || s?.id || s?.user?.userId || s?.studentId; const uid = await fixStudentUserId(rawUid, s?.email); if (uid) { plan[gid].push(uid); current++ } } }
                       // Vòng 2: lấp đầy
-                      while (current < max) { const avail = majorKeys.find(k => (majors[k]?.length ?? 0) > 0); if (!avail) break; const s = majors[avail].pop(); if (s) { const uid = s?.user?.id || s?.userId || s?.id || s?.user?.userId || s?.studentId; if (uid) { plan[gid].push(String(uid)); current++ } } }
+                      while (current < max) { const avail = majorKeys.find(k => (majors[k]?.length ?? 0) > 0); if (!avail) break; const s = majors[avail].pop(); if (s) { const rawUid = s?.user?.id || s?.userId || s?.id || s?.user?.userId || s?.studentId; const uid = await fixStudentUserId(rawUid, s?.email); if (uid) { plan[gid].push(uid); current++ } } }
                     }
                     for (const g of targetGroups) {
                       const ids = Array.from(new Set(plan[g.id] || []))

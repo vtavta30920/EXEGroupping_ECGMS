@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { PlusCircle, Filter, Loader2 } from "lucide-react"
 import { GroupService } from "@/lib/api/groupService"
 import type { Group, User } from "@/lib/types"
-import { getCurrentUser, updateCurrentUser } from "@/lib/utils/auth"
+import { getCurrentUser, updateCurrentUser, getUserIdFromJWT } from "@/lib/utils/auth"
 import { useToast } from "@/components/ui/use-toast"
 import { isSelfSelectOpen } from "@/lib/config/businessRules"
 import ChangeMockData, { type ChangeMockDataProps } from "@/components/features/ChangeMockData"
@@ -78,7 +78,8 @@ export default function FindGroupsPage({ params }: { params: { courseId: string 
     }
     try {
       setJoiningId(groupId)
-      const updated = await GroupService.joinGroup(groupId, user.userId)
+      const userIdToUse = getUserIdFromJWT() || user.userId;
+      const updated = await GroupService.joinGroup(groupId, userIdToUse)
       // Cập nhật user local
       const newUser = { ...user, groupId: updated.groupId }
       updateCurrentUser(newUser)

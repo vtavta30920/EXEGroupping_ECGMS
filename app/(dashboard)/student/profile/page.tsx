@@ -158,11 +158,11 @@ export default function StudentProfilePage() {
                     : undefined,
                 };
                 setProfile(mappedProfile);
-                setEditable({
-                  fullName: mappedProfile.fullName ?? null,
-                  bio: mappedProfile.bio ?? null,
-                  avatarUrl: mappedProfile.avatarUrl ?? null,
-                });
+          setEditable({
+            // fullName: mappedProfile.fullName ?? null, // Không cho edit
+            bio: mappedProfile.bio ?? null,
+            // avatarUrl: mappedProfile.avatarUrl ?? null, // Không cho edit
+          });
                 if (mappedProfile.major?.majorCode)
                   setSelectedMajor(mappedProfile.major.majorCode);
                 return;
@@ -192,9 +192,9 @@ export default function StudentProfilePage() {
           };
           setProfile(mappedProfile);
           setEditable({
-            fullName: mappedProfile.fullName ?? null,
+            // fullName: mappedProfile.fullName ?? null, // Không cho edit
             bio: mappedProfile.bio ?? null,
-            avatarUrl: mappedProfile.avatarUrl ?? null,
+            // avatarUrl: mappedProfile.avatarUrl ?? null, // Không cho edit
           });
           // Nếu có major từ profile, ưu tiên dùng majorCode làm selectedMajor
           if (mappedProfile.major?.majorCode) {
@@ -233,10 +233,11 @@ export default function StudentProfilePage() {
     if (!user) return;
     setIsSaving(true);
     try {
+      // Chỉ gửi các field được phép edit
       const requestBody = {
-        fullName: editable.fullName ?? null,
+        // fullName: editable.fullName ?? null, // Không cho edit
         bio: editable.bio ?? null,
-        avatarUrl: editable.avatarUrl ?? null,
+        // avatarUrl: editable.avatarUrl ?? null, // Không cho edit
       };
       const uid = effectiveUserId || user.userId;
       await UserProfileService.putApiUserProfile({ id: uid, requestBody });
@@ -251,9 +252,9 @@ export default function StudentProfilePage() {
 
       const updatedProfile: UserProfile = {
         ...profile,
-        fullName: editable.fullName ?? profile?.fullName ?? null,
+        // fullName: editable.fullName ?? profile?.fullName ?? null, // Không cho edit
         bio: editable.bio ?? profile?.bio ?? null,
-        avatarUrl: editable.avatarUrl ?? profile?.avatarUrl ?? null,
+        // avatarUrl: editable.avatarUrl ?? profile?.avatarUrl ?? null, // Không cho edit
         major: selectedMajor
           ? ({ ...(profile?.major || {}), majorCode: selectedMajor } as any)
           : profile?.major,
@@ -264,7 +265,7 @@ export default function StudentProfilePage() {
         ...user,
         major: selectedMajor as "SE" | "SS" | undefined,
         skillSet: selectedSkills,
-        fullName: (editable.fullName ?? user.fullName) as string,
+        // fullName: (editable.fullName ?? user.fullName) as string, // Không cho edit
       };
       updateCurrentUser(updatedUserData);
       setUser(updatedUserData);
@@ -341,9 +342,9 @@ export default function StudentProfilePage() {
                     onClick={() => {
                       setIsEditing(false);
                       setEditable({
-                        fullName: profile?.fullName ?? null,
+                        // fullName: profile?.fullName ?? null, // Không cần reset vì không cho edit
                         bio: profile?.bio ?? null,
-                        avatarUrl: profile?.avatarUrl ?? null,
+                        // avatarUrl: profile?.avatarUrl ?? null, // Không cần reset vì không cho edit
                       });
                       setSelectedMajor(profile?.major?.majorCode);
                     }}
@@ -365,22 +366,9 @@ export default function StudentProfilePage() {
               {/* Thông tin cố định */}
               <div className="space-y-1">
                 <Label>Họ tên:</Label>
-                {isEditing ? (
-                  <Input
-                    value={editable.fullName ?? ""}
-                    onChange={(e) =>
-                      setEditable((prev) => ({
-                        ...prev,
-                        fullName: e.target.value,
-                      }))
-                    }
-                    placeholder="Họ tên"
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {profile?.fullName || user.fullName}
-                  </p>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  {profile?.fullName || user.fullName}
+                </p>
               </div>
               <div className="space-y-1">
                 <Label>Email:</Label>
@@ -401,23 +389,10 @@ export default function StudentProfilePage() {
 
               {/* Thông tin có thể chỉnh sửa */}
               <div className="space-y-1">
-                <Label htmlFor="major">Chuyên ngành (Major)</Label>
-                <Select onValueChange={setSelectedMajor} value={selectedMajor}>
-                  <SelectTrigger id="major">
-                    <SelectValue placeholder="Chọn chuyên ngành của bạn" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {/* Sử dụng state majors lấy từ API */}
-                    {majors.map((major) => (
-                      <SelectItem
-                        key={major.id || major.majorCode}
-                        value={major.majorCode}
-                      >
-                        {major.name} ({major.majorCode})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Chuyên ngành (Major)</Label>
+                <p className="text-sm text-muted-foreground">
+                  {profile?.major?.majorName || selectedMajor || "Chưa cập nhật"}
+                </p>
               </div>
             </div>
 
@@ -440,22 +415,9 @@ export default function StudentProfilePage() {
             </div>
             <div className="space-y-1 md:col-span-2">
               <Label>Ảnh đại diện (Avatar URL)</Label>
-              {isEditing ? (
-                <Input
-                  value={editable.avatarUrl ?? ""}
-                  onChange={(e) =>
-                    setEditable((prev) => ({
-                      ...prev,
-                      avatarUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="https://..."
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {profile?.avatarUrl || "Chưa cập nhật"}
-                </p>
-              )}
+              <p className="text-sm text-muted-foreground">
+                {profile?.avatarUrl || "Chưa cập nhật"}
+              </p>
             </div>
 
             <div className="space-y-1">

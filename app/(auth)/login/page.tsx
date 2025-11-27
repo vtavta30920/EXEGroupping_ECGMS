@@ -95,15 +95,49 @@ export default function LoginPage() {
         console.warn("[v0] Failed to store token:", err);
       }
 
+      // Validate userId is a valid GUID
+      const rawUserId = apiUser.id || apiUser.userId || "";
+      if (!rawUserId) {
+        throw new Error("User ID is required from server response");
+      }
+
+      // Check if userId is a valid GUID format
+      const guidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      if (!guidRegex.test(rawUserId)) {
+        console.warn("[v0] UserId from API is not a valid GUID:", rawUserId);
+        throw new Error("User ID from server is not in correct GUID format");
+      }
+
+      // Get groupId for students
+      let groupId = null;
+      if (userRole === 'student') {
+        try {
+          console.log('[v0] Fetching group info for student userId:', rawUserId);
+          const GroupService = (await import('@/lib/api/groupService')).GroupService;
+          const groupData = await GroupService.getGroupByStudentId(rawUserId);
+          groupId = groupData?.groupId || null;
+          console.log('[v0] Found groupId from API:', groupId);
+        } catch (groupError) {
+          console.warn('[v0] Could not fetch group info:', groupError);
+          // Fallback to existing data
+          const existingUserData = JSON.parse(localStorage.getItem('currentUser') || '{}');
+          groupId = existingUserData.groupId || null;
+          console.log('[v0] Using fallback groupId:', groupId);
+        }
+      }
+
       // Normalize user data
       const normalized: User = {
-        userId: apiUser.id || apiUser.userId || "",
+        userId: rawUserId,
         username: apiUser.username || email,
         fullName: apiUser.username || email,
         email: apiUser.email || email,
         role: (userRole as "lecturer" | "student" | "admin") || "student",
         skillSet: apiUser.skillSet,
+        groupId: groupId,
       };
+
+      console.log("[v0] Final user with groupId:", normalized.groupId);
 
       console.log("[v0] User normalized:", normalized);
       updateCurrentUser(normalized);

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/utils/auth";
 // import { LayoutDashboard, BookOpen, Users, ClipboardList, Award, LogOut, Menu, X, User as UserIcon, UserX } from "lucide-react"
 // import { useState } from "react";
 // import { useRouter } from "next/navigation";
@@ -28,6 +29,22 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children, role }: DashboardLayoutProps) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  // Load user data
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    setUser(currentUser);
+
+    // Listen for user state changes
+    const handleUserStateChange = () => {
+      const updatedUser = getCurrentUser();
+      setUser(updatedUser);
+    };
+
+    window.addEventListener('userStateChanged', handleUserStateChange);
+    return () => window.removeEventListener('userStateChanged', handleUserStateChange);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("currentUser");
@@ -49,10 +66,15 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
   const studentNavItems = [
     { name: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
-    { name: "My Group", href: "/student/group", icon: Users },
+    {
+      name: user?.groupId ? "Vào Không Gian Làm Việc" : "My Group",
+      href: user?.groupId ? `/student/groups/${user.groupId}` : "/student/group",
+      icon: Users
+    },
     { name: "My Tasks", href: "/student/tasks", icon: ClipboardList },
     { name: "Profile", href: "/student/profile", icon: UserIcon },
   ];
+
 
   const adminNavItems = [
     { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
@@ -118,6 +140,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
                 <span className="font-medium">{item.name}</span>
               </button>
             ))}
+
           </nav>
 
           {/* Logout */}
