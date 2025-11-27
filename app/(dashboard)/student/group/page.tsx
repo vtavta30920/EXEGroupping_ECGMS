@@ -11,7 +11,7 @@ import { Filter, Loader2, Crown, Sparkles, UserPlus } from "lucide-react"
 // SỬA: Import Service và Type thay vì Mock Data
 import { GroupService } from "@/lib/api/groupService"
 import type { Group } from "@/lib/types"
-import { getCurrentUser, updateCurrentUser } from "@/lib/utils/auth"
+import { getCurrentUser, updateCurrentUser, getUserIdFromJWT } from "@/lib/utils/auth"
 import ChangeMockData, { type ChangeMockDataProps } from "@/components/features/ChangeMockData"
 import { mockGroups } from "@/lib/mock-data/groups"
 import { useToast } from "@/components/ui/use-toast"
@@ -33,6 +33,13 @@ export default function FindGroupsPage() {
       return v ? v === 'true' : true
     } catch { return true }
   });
+
+  // Function to refresh user state
+  const refreshUser = React.useCallback(() => {
+    const currentUser = getCurrentUser() as any;
+    setUser(currentUser);
+    console.log("🔄 [refreshUser] User state refreshed:", currentUser);
+  }, []);
 
   // Fetch dữ liệu từ API khi trang được tải
   const loadGroups = React.useCallback(async () => {
@@ -64,12 +71,29 @@ export default function FindGroupsPage() {
     loadGroups()
   }, [loadGroups])
 
+  // Listen for user state changes (e.g., when leaving group)
+  React.useEffect(() => {
+    const handleUserStateChange = () => {
+      console.log("📡 [userStateChange] Received user state change event");
+      refreshUser();
+    };
+
+    window.addEventListener('userStateChanged', handleUserStateChange);
+
+    // Also refresh user state on mount to ensure we have latest data
+    refreshUser();
+
+    return () => {
+      window.removeEventListener('userStateChanged', handleUserStateChange);
+    };
+  }, [refreshUser])
+
   React.useEffect(() => {
     (async () => {
       const cu = getCurrentUser() as any
       if (!cu || cu.role !== 'student') return
       if (cu.groupId) return
-      let uid = String(cu.userId || '')
+      let uid = getUserIdFromJWT() || String(cu.userId || '')
       const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uid)
       if (!isGuid && cu.email) {
         try {
@@ -157,12 +181,52 @@ export default function FindGroupsPage() {
         toast({ title: isFirstMember ? "🎉 Chúc mừng Tân Trưởng Nhóm!" : "Tham gia thành công (Mock)", description: isFirstMember ? "Bạn là thành viên đầu tiên và đã trở thành Leader." : `Bạn đã tham gia ${g.groupName}.`, className: isFirstMember ? "bg-yellow-50 border-yellow-200 text-yellow-800" : undefined })
         router.push(`/student/groups/${groupId}`)
       } else {
-        await GroupService.joinGroup(groupId, (user as any).email || (user as any).userId)
+        // 🔧 FIX: Ưu tiên lấy userId từ JWT nameidentifier
+        let userIdToUse = getUserIdFromJWT() || user.userId;
+        console.log("🔍 [handleJoinGroup] userId từ JWT:", getUserIdFromJWT(), "từ user:", user.userId, "sử dụng:", userIdToUse);
+
+        if (!userIdToUse) {
+          throw new Error("User ID is required to join group");
+        }
+
+        // Nếu vẫn không phải GUID, thử lấy từ API (fallback)
+        const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userIdToUse);
+        if (!isGuid && user.email) {
+          console.log("🔄 [handleJoinGroup] userId vẫn không phải GUID, lấy từ API...");
+          try {
+            let ok = false;
+            let res = await fetch(`/api/proxy/api/User/email/${encodeURIComponent(user.email)}`, { cache: 'no-store', headers: { accept: 'text/plain' } });
+            if (res.ok) {
+              const raw = await res.json();
+              userIdToUse = raw?.id || userIdToUse;
+              ok = true;
+              console.log("✅ [handleJoinGroup] Lấy userId từ API:", userIdToUse);
+            }
+            if (!ok) {
+              res = await fetch(`/api/proxy/User/email/${encodeURIComponent(user.email)}`, { cache: 'no-store', headers: { accept: 'application/json' } });
+              if (res.ok) {
+                const raw = await res.json();
+                userIdToUse = raw?.id || userIdToUse;
+                ok = true;
+              }
+            }
+            if (!ok) {
+              try {
+                const raw = await (await import('@/lib/api/generated/services/UserService')).UserService.getApiUserEmail({ email: user.email });
+                userIdToUse = (raw as any)?.id || userIdToUse;
+              } catch {}
+            }
+          } catch (apiError) {
+            console.warn("❌ [handleJoinGroup] Lỗi lấy userId từ API:", apiError);
+          }
+        }
+
+        await GroupService.joinGroup(groupId, userIdToUse)
 
         // Bước 2: Nếu là người đầu tiên, set LeaderId
         if (isFirstMember) {
           try {
-            await GroupService.updateGroup(groupId, { leaderId: (user as any).userId })
+            await GroupService.updateGroup(groupId, { leaderId: userIdToUse })
             toast({
               title: "🎉 Chúc mừng Tân Trưởng Nhóm!",
               description: "Bạn là thành viên đầu tiên và đã trở thành Leader.",
@@ -178,8 +242,14 @@ export default function FindGroupsPage() {
 
         // Bước 3: Cập nhật user + chuyển trang
         const newUser = { ...user, groupId } as any
+        console.log("✅ [handleJoinGroup] Updating user with groupId:", groupId, "New user:", newUser);
         updateCurrentUser(newUser)
         setUser(newUser)
+
+        // Dispatch event to notify other components about user state change
+        window.dispatchEvent(new CustomEvent('userStateChanged'));
+        console.log("📡 [handleJoinGroup] Dispatched userStateChanged event");
+
         router.push(`/student/groups/${groupId}`)
       }
     } catch (err: any) {
