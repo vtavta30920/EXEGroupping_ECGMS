@@ -45,6 +45,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 
 export default function StudentsWithoutGroupPage() {
   const router = useRouter();
@@ -71,6 +72,7 @@ export default function StudentsWithoutGroupPage() {
     loadStudents();
   }, [router]);
 
+  // load students without group
   const loadStudents = async () => {
     try {
       setLoading(true);
@@ -95,10 +97,11 @@ export default function StudentsWithoutGroupPage() {
 
   useEffect(() => {
     let filtered = [...students];
+    const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
     // Filter by search term
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+    if (debouncedSearchTerm) {
+      const term = debouncedSearchTerm.toLowerCase();
       filtered = filtered.filter(
         (student) =>
           student.userProfileViewModel.fullName.toLowerCase().includes(term) ||
