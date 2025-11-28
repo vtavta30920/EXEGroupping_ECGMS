@@ -34,6 +34,7 @@ const mapApiCourseToFeCourse = (c: CourseViewModel): Course => {
     lecturerId: "",
     groupCount: 0,
     studentCount: Array.isArray((c as any).studentCourses) ? (c as any).studentCourses.length : ((c as any).studentCount ?? 0),
+    maxMembers: (c as any).maxMembers || (c as any).maxGroupSize || 5, // Lấy maxMembers từ API
   };
 };
 
