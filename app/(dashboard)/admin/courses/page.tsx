@@ -161,6 +161,7 @@ export default function AdminCoursesPage() {
 
   return (
     <DashboardLayout role="admin">
+      
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
