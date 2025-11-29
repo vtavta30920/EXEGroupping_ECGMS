@@ -14,6 +14,7 @@ export function useCourseData() {
     loadCourses()
   }, [])
 
+  // View all courses in the database
   const loadCourses = async () => {
     try {
       setLoading(true)
@@ -27,6 +28,7 @@ export function useCourseData() {
     }
   }
 
+  // View a specific course by ID
   const getCourseById = async (courseId: string) => {
     try {
       setError(null)
@@ -38,6 +40,7 @@ export function useCourseData() {
     }
   }
 
+  // Create a new course
   const createCourse = async (course: Omit<Course, 'courseId'>) => {
     try {
       setError(null)

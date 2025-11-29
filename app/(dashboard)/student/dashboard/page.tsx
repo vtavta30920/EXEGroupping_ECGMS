@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/layouts/dashboard-layout"
-import { getCurrentUser } from "@/lib/utils/auth"
+import { getCurrentUser, updateCurrentUser } from "@/lib/utils/auth"
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -37,26 +37,110 @@ export default function StudentDashboard() {
     const currentUser = getCurrentUser() as User | null
     if (!currentUser || currentUser.role !== "student") { router.push("/login"); return }
     setUser(currentUser)
+
+    // Listen for user state changes (join/leave group)
+    const handleUserStateChange = () => {
+      const updatedUser = getCurrentUser() as User | null
+      setUser(updatedUser)
+      console.log("📡 [Dashboard] User state updated:", updatedUser?.groupId)
+    }
+
+    window.addEventListener('userStateChanged', handleUserStateChange)
+    return () => window.removeEventListener('userStateChanged', handleUserStateChange)
     ;(async () => {
       try {
-        const hasGroupId = !!currentUser.groupId
-        if (!hasGroupId) {
+        // Always try to get latest group info from API for students
+        console.log('[Dashboard] Fetching latest group info for userId:', currentUser!.userId);
+        let groupData = null;
+        try {
+          groupData = await GroupService.getGroupByStudentId(currentUser!.userId);
+          console.log('[Dashboard] Group data from API:', groupData);
+        } catch (apiError) {
+          console.warn('[Dashboard] Could not fetch group from API:', apiError);
+          // Fallback to stored groupId
+          if (currentUser!.groupId) {
+            try {
+              groupData = await GroupService.getGroupById(String(currentUser!.groupId));
+              console.log('[Dashboard] Group data from stored groupId:', groupData);
+            } catch (fallbackError) {
+              console.warn('[Dashboard] Could not fetch group from stored groupId:', fallbackError);
+            }
+          }
+        }
+
+        if (groupData) {
+          // User has a group
+          setGroup(groupData);
+          const ts = await TaskService.getTasksByGroupId(String(groupData.groupId));
+          setTasks(ts);
+          setActiveCourses([]); // Clear courses when user has group
+
+          // Update user data if groupId changed
+          if (groupData.groupId !== currentUser!.groupId) {
+            console.log('[Dashboard] Updating user groupId:', currentUser!.groupId, '→', groupData.groupId);
+            const updatedUser = { ...currentUser!, groupId: groupData.groupId };
+            updateCurrentUser(updatedUser);
+          }
+        } else {
+          // User doesn't have a group
           const courses = await CourseService.getCourses()
           const list = (Array.isArray(courses) ? courses : []).filter(c => String((c as any).status || '').toLowerCase() !== 'inactive')
           setActiveCourses(list)
           setGroup(null)
           setTasks([])
-        } else {
-          const g = await GroupService.getGroupById(String(currentUser.groupId))
-          setGroup(g)
-          const ts = await TaskService.getTasksByGroupId(String(currentUser.groupId))
-          setTasks(ts)
         }
       } finally {
         setLoading(false)
       }
     })()
   }, [router])
+
+  // Reload data when user changes (after join/leave group)
+  useEffect(() => {
+    if (!user) return
+
+    const reloadData = async () => {
+      try {
+        setLoading(true)
+
+        // Always try to get latest group info from API
+        console.log('[Dashboard] Reloading data for userId:', user.userId);
+        let groupData = null;
+        try {
+          groupData = await GroupService.getGroupByStudentId(user.userId);
+          console.log('[Dashboard] Reload group data from API:', groupData);
+        } catch (apiError) {
+          console.warn('[Dashboard] Could not fetch group from API:', apiError);
+          // Fallback to stored groupId
+          if (user.groupId) {
+            try {
+              groupData = await GroupService.getGroupById(String(user.groupId));
+              console.log('[Dashboard] Reload group data from stored groupId:', groupData);
+            } catch (fallbackError) {
+              console.warn('[Dashboard] Could not fetch group from stored groupId:', fallbackError);
+            }
+          }
+        }
+
+        if (groupData) {
+          setGroup(groupData);
+          const ts = await TaskService.getTasksByGroupId(String(groupData.groupId));
+          setTasks(ts);
+          setActiveCourses([]);
+        } else {
+          const courses = await CourseService.getCourses()
+          const list = (Array.isArray(courses) ? courses : []).filter(c => String((c as any).status || '').toLowerCase() !== 'inactive')
+          setActiveCourses(list)
+          setGroup(null)
+          setTasks([])
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    reloadData()
+  }, [user])
 
   const upcoming = useMemo(() => user ? getUpcomingTasks(tasks, user.userId) : [], [tasks, user])
   const statusChart = useMemo(() => {
@@ -89,7 +173,7 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {!loading && !group && (
+        {!loading && !user?.groupId && (
           <Card className="border-amber-200 bg-amber-50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-amber-600" /> Bạn chưa tham gia nhóm</CardTitle>
@@ -120,7 +204,6 @@ export default function StudentDashboard() {
                   <div className="font-semibold">{group.groupName}</div>
                   <div className="text-sm text-gray-600">Trạng thái: {group.status}</div>
                   <div className="text-sm text-gray-600">Mentor: {group.lecturerName || '—'}</div>
-                  <Button variant="outline" className="mt-2" onClick={() => router.push('/student/group')}>Vào không gian làm việc</Button>
                 </div>
               ) : (
                 <div className="text-sm text-gray-600">Chưa tham gia nhóm</div>

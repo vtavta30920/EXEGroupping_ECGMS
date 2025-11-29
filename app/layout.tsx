@@ -2,9 +2,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from "./providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster";
-import { ApiProvider } from "@/components/ApiProvider"; // Import ApiProvider
+import { ApiProvider } from "./providers/ApiProviders"
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,7 +23,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light" // "system" | "light" | "dark"
           enableSystem
           disableTransitionOnChange
         >
