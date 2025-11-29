@@ -61,6 +61,7 @@ export default function StudentsWithoutGroupPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const { toast } = useToast();
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   useEffect(() => {
     const currentUser = getCurrentUser();
@@ -77,8 +78,10 @@ export default function StudentsWithoutGroupPage() {
     try {
       setLoading(true);
       const data = await LecturerService.getStudentsWithoutGroup();
-      setStudents(data);
-      setFilteredStudents(data);
+      // Ensure data is always an array
+      const studentsArray = Array.isArray(data) ? data : [];
+      setStudents(studentsArray);
+      setFilteredStudents(studentsArray);
     } catch (error) {
       console.error("Error loading students:", error);
       const errorMessage =
@@ -90,14 +93,22 @@ export default function StudentsWithoutGroupPage() {
         description: errorMessage,
         variant: "destructive",
       });
+      // Ensure filteredStudents is always an array even on error
+      setStudents([]);
+      setFilteredStudents([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // Ensure students is always an array
+    if (!Array.isArray(students)) {
+      setFilteredStudents([]);
+      return;
+    }
+
     let filtered = [...students];
-    const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
     // Filter by search term
     if (debouncedSearchTerm) {
@@ -128,13 +139,16 @@ export default function StudentsWithoutGroupPage() {
     setFilteredStudents(filtered);
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [searchTerm, filterMajor, filterSkill, students]);
+  }, [debouncedSearchTerm, filterMajor, filterSkill, students]);
 
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
+  // Calculate pagination - ensure filteredStudents is always an array
+  const safeFilteredStudents = Array.isArray(filteredStudents)
+    ? filteredStudents
+    : [];
+  const totalPages = Math.ceil(safeFilteredStudents.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedStudents = filteredStudents.slice(startIndex, endIndex);
+  const paginatedStudents = safeFilteredStudents.slice(startIndex, endIndex);
 
   // Handle page change
   const handlePageChange = (page: number) => {
@@ -146,7 +160,7 @@ export default function StudentsWithoutGroupPage() {
   const exportToExcel = () => {
     try {
       // Prepare data for Excel
-      const excelData = filteredStudents.map((student) => ({
+      const excelData = safeFilteredStudents.map((student) => ({
         "Mã sinh viên": student.studentId,
         "Tên đăng nhập": student.user.username,
         "Họ và tên": student.userProfileViewModel.fullName,
@@ -191,7 +205,7 @@ export default function StudentsWithoutGroupPage() {
 
       toast({
         title: "Xuất Excel thành công",
-        description: `Đã xuất ${filteredStudents.length} sinh viên ra file Excel`,
+        description: `Đã xuất ${safeFilteredStudents.length} sinh viên ra file Excel`,
       });
     } catch (error) {
       console.error("Error exporting to Excel:", error);
@@ -250,7 +264,7 @@ export default function StudentsWithoutGroupPage() {
           <Button
             onClick={exportToExcel}
             className="bg-green-600 hover:bg-green-700"
-            disabled={filteredStudents.length === 0}
+            disabled={safeFilteredStudents.length === 0}
           >
             <Download className="w-4 h-4 mr-2" />
             Xuất Excel
@@ -282,7 +296,7 @@ export default function StudentsWithoutGroupPage() {
               <div className="flex items-center gap-2">
                 <UserX className="w-5 h-5 text-orange-600" />
                 <span className="text-2xl font-bold">
-                  {filteredStudents.length}
+                  {safeFilteredStudents.length}
                 </span>
               </div>
             </CardContent>
@@ -380,8 +394,8 @@ export default function StudentsWithoutGroupPage() {
                 <CardTitle>Danh sách sinh viên</CardTitle>
                 <CardDescription>
                   Hiển thị {startIndex + 1}-
-                  {Math.min(endIndex, filteredStudents.length)} trong tổng số{" "}
-                  {filteredStudents.length} sinh viên
+                  {Math.min(endIndex, safeFilteredStudents.length)} trong tổng
+                  số {safeFilteredStudents.length} sinh viên
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -407,7 +421,7 @@ export default function StudentsWithoutGroupPage() {
               <div className="text-center py-8">
                 <p className="text-gray-600">Đang tải dữ liệu...</p>
               </div>
-            ) : filteredStudents.length === 0 ? (
+            ) : safeFilteredStudents.length === 0 ? (
               <div className="text-center py-8">
                 <UserX className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">
@@ -491,7 +505,7 @@ export default function StudentsWithoutGroupPage() {
             )}
 
             {/* Pagination */}
-            {!loading && filteredStudents.length > 0 && totalPages > 1 && (
+            {!loading && safeFilteredStudents.length > 0 && totalPages > 1 && (
               <div className="mt-6 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
                   Trang {currentPage} / {totalPages}
