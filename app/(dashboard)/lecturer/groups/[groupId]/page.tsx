@@ -308,10 +308,6 @@ export default function GroupDetailPage() {
                   {group.topicName || "Chưa có chủ đề"}
                 </p>
               </div>
-              {/* <div>
-                <p className="text-sm text-gray-600">Mã môn học</p>
-                <p className="font-semibold">{group.courseId}</p>
-              </div> */}
             </div>
           </CardContent>
         </Card>
@@ -355,7 +351,7 @@ export default function GroupDetailPage() {
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <div className="flex items-center gap-2">
                               <h3 className="font-semibold text-lg">
-                                {member.username}
+                                {member.fullName}
                               </h3>
                               {member.roleInGroup && (
                                 <Badge
@@ -416,7 +412,7 @@ export default function GroupDetailPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
-                    placeholder="Nhập tên, email hoặc username..."
+                    placeholder="Nhập tên hoặc email "
                     value={studentSearch}
                     onChange={(e) => setStudentSearch(e.target.value)}
                     className="pl-9"
@@ -465,9 +461,7 @@ export default function GroupDetailPage() {
         {/* Delete Member Dialog */}
         <Dialog
           open={deleteDialog.open}
-          onOpenChange={(open) =>
-            setDeleteDialog({ ...deleteDialog, open })
-          }
+          onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
         >
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
@@ -503,10 +497,7 @@ export default function GroupDetailPage() {
                       </p>
                     )}
                     {deleteDialog.member?.roleInGroup && (
-                      <Badge
-                        variant="outline"
-                        className="mt-1 text-xs"
-                      >
+                      <Badge variant="outline" className="mt-1 text-xs">
                         {deleteDialog.member.roleInGroup}
                       </Badge>
                     )}
@@ -520,7 +511,8 @@ export default function GroupDetailPage() {
                     deleteDialog.member?.username ||
                     "thành viên này"}
                 </span>{" "}
-                khỏi nhóm <span className="font-semibold">{group?.groupName}</span>?
+                khỏi nhóm{" "}
+                <span className="font-semibold">{group?.groupName}</span>?
               </p>
             </div>
             <DialogFooter className="gap-2">
@@ -554,8 +546,9 @@ export default function GroupDetailPage() {
                       setGroup(updatedGroup);
                     } else {
                       // Fallback: reload the group
-                      const reloadedGroup =
-                        await GroupService.getGroupById(groupId);
+                      const reloadedGroup = await GroupService.getGroupById(
+                        groupId
+                      );
                       if (reloadedGroup) {
                         setGroup(reloadedGroup);
                       }
@@ -569,10 +562,7 @@ export default function GroupDetailPage() {
                       className: "bg-green-50 border-green-200",
                     });
                   } catch (error) {
-                    console.error(
-                      "Error removing member from group:",
-                      error
-                    );
+                    console.error("Error removing member from group:", error);
                     const description =
                       error instanceof Error && error.message
                         ? error.message

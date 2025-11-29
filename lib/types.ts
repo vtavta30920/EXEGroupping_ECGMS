@@ -73,28 +73,6 @@ export interface GroupNeeds {
   count: number;
 }
 
-export interface GroupMember {
-  userId: string;
-  fullName: string;
-  avatarUrl?: string;
-  role: "leader" | "member";
-  major: "SE" | "SS";
-
-  // Thuộc tính cũ (nếu có)
-  memberId?: string;
-  groupId?: string;
-  studentId?: string;
-  studentName?: string;
-  skillSet?: string[];
-  courseId: string;
-  courseCode: string;
-  courseName: string;
-  semester: string;
-  year: number;
-  lecturerId: string;
-  description?: string;
-}
-
 // ===== GROUP TYPES =====
 export interface Group {
   groupId: string;
