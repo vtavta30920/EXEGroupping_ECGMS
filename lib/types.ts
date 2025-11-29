@@ -63,6 +63,7 @@ export interface Course {
   groupCount?: number;
   studentCount?: number;
   lecturerCount?: number;
+  maxMembers?: number; // Số thành viên tối đa cho mỗi nhóm trong khóa học
   createdDate?: string; // SỬA LỖI 8, 9
   updatedDate?: string;
 }
