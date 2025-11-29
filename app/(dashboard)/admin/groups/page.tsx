@@ -1,39 +1,56 @@
 // app/(dashboard)/admin/groups/page.tsx
-"use client"
+"use client";
 
-import * as React from "react"
-import { DashboardLayout } from "@/components/layouts/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/components/ui/use-toast"
-import { CourseService } from "@/lib/api/courseService"
-import { TeamAllocationService } from "@/lib/api/generated"
-import { GroupService as GeneratedGroupService } from "@/lib/api/generated/services/GroupService"
-import { GroupService } from "@/lib/api/groupService"
+import * as React from "react";
+import { DashboardLayout } from "@/components/layouts/dashboard-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/components/ui/use-toast";
+import { CourseService } from "@/lib/api/courseService";
+import { TeamAllocationService } from "@/lib/api/generated";
+import { GroupService as GeneratedGroupService } from "@/lib/api/generated/services/GroupService";
+import { GroupService } from "@/lib/api/groupService";
 // Dùng gọi trực tiếp qua BFF Proxy cho endpoint GetAllGroups
-import type { Course } from "@/lib/types"
-import { CreateEmptyGroupsDialog } from "@/components/features/group/CreateEmptyGroupsDialog"
+import type { Course } from "@/lib/types";
+import { CreateEmptyGroupsDialog } from "@/components/features/group/CreateEmptyGroupsDialog";
 import ChangeMockData from "@/components/features/ChangeMockData";
 import { getCourses as getCoursesMock } from "@/lib/mock-data/courses";
 // Đã bỏ ImportCard và logic XLSX tại đây; chuyển sang Dialog
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { mockUsers } from "@/lib/mock-data/auth"
-import { getUserIdFromJWT } from "@/lib/utils/auth"
-import { mockGroups } from "@/lib/mock-data/groups"
-import { EditGroupDialog } from "@/components/features/group/EditGroupDialog"
-import { LecturerCourseService, UserService } from "@/lib/api/generated"
-import { GroupMemberService as GeneratedGroupMemberService } from "@/lib/api/generated/services/GroupMemberService"
-import { Badge } from "@/components/ui/badge"
-import { Shuffle } from "lucide-react"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { mockUsers } from "@/lib/mock-data/auth";
+import { getUserIdFromJWT } from "@/lib/utils/auth";
+import { mockGroups } from "@/lib/mock-data/groups";
+import { EditGroupDialog } from "@/components/features/group/EditGroupDialog";
+import { LecturerCourseService, UserService } from "@/lib/api/generated";
+import { GroupMemberService as GeneratedGroupMemberService } from "@/lib/api/generated/services/GroupMemberService";
+import { Badge } from "@/components/ui/badge";
+import { Shuffle } from "lucide-react";
 
 // Helper function to fix student userId (convert email to GUID if needed)
-async function fixStudentUserId(rawUid: any, email?: string): Promise<string | null> {
+async function fixStudentUserId(
+  rawUid: any,
+  email?: string
+): Promise<string | null> {
   if (!rawUid) return null;
 
   const uid = String(rawUid);
-  const guidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  const guidRegex =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
   // If already a GUID, return as is
   if (guidRegex.test(uid)) {
@@ -41,13 +58,16 @@ async function fixStudentUserId(rawUid: any, email?: string): Promise<string | n
   }
 
   // If it's an email and we have email, try to get userId from API
-  if (email && uid.includes('@')) {
+  if (email && uid.includes("@")) {
     try {
       console.log(`🔄 [fixStudentUserId] Converting email to GUID: ${email}`);
-      const res = await fetch(`/api/proxy/api/User/email/${encodeURIComponent(email)}`, {
-        cache: 'no-store',
-        headers: { accept: 'text/plain' }
-      });
+      const res = await fetch(
+        `/api/proxy/api/User/email/${encodeURIComponent(email)}`,
+        {
+          cache: "no-store",
+          headers: { accept: "text/plain" },
+        }
+      );
       if (res.ok) {
         const userData = await res.json();
         if (userData?.id && guidRegex.test(userData.id)) {
@@ -56,7 +76,10 @@ async function fixStudentUserId(rawUid: any, email?: string): Promise<string | n
         }
       }
     } catch (error) {
-      console.warn(`❌ [fixStudentUserId] Failed to convert email to GUID:`, error);
+      console.warn(
+        `❌ [fixStudentUserId] Failed to convert email to GUID:`,
+        error
+      );
     }
   }
 
@@ -65,44 +88,57 @@ async function fixStudentUserId(rawUid: any, email?: string): Promise<string | n
 }
 
 export default function AdminGroupsPage() {
-  const { toast } = useToast()
-  const [courses, setCourses] = React.useState<Course[]>([])
-  const [selectedCourseId, setSelectedCourseId] = React.useState<string>("")
-  const [selectedCourseCode, setSelectedCourseCode] = React.useState<string>("")
-  const [selectedCourseName, setSelectedCourseName] = React.useState<string>("")
-  const [emptyCount, setEmptyCount] = React.useState<number | null>(null)
-  const [loadingCount, setLoadingCount] = React.useState(false)
-  const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [groups, setGroups] = React.useState<any[]>([])
-  const [statusFilter, setStatusFilter] = React.useState<string>("all") // all | full | empty
-  const [mentorFilter, setMentorFilter] = React.useState<string>("all")
+  const { toast } = useToast();
+  const [courses, setCourses] = React.useState<Course[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = React.useState<string>("");
+  const [selectedCourseCode, setSelectedCourseCode] =
+    React.useState<string>("");
+  const [selectedCourseName, setSelectedCourseName] =
+    React.useState<string>("");
+  const [emptyCount, setEmptyCount] = React.useState<number | null>(null);
+  const [loadingCount, setLoadingCount] = React.useState(false);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [groups, setGroups] = React.useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = React.useState<string>("all"); // all | full | empty
+  const [mentorFilter, setMentorFilter] = React.useState<string>("all");
   // Hydration-safe default: start with true on both server and client,
   // then read persisted value after mount to avoid mismatch.
   const [useMock, setUseMock] = React.useState<boolean>(true);
-  const [courseLecturerId, setCourseLecturerId] = React.useState<string>("")
-  const [courseLecturerName, setCourseLecturerName] = React.useState<string>("—")
-  const [editOpen, setEditOpen] = React.useState(false)
-  const [editTarget, setEditTarget] = React.useState<{ id: string; name: string; courseCode: string } | null>(null)
-  const [isRandomizing, setIsRandomizing] = React.useState(false)
-  const [isAllocating, setIsAllocating] = React.useState(false)
-  const [lecturerNames, setLecturerNames] = React.useState<Record<string, string>>({})
+  const [courseLecturerId, setCourseLecturerId] = React.useState<string>("");
+  const [courseLecturerName, setCourseLecturerName] =
+    React.useState<string>("—");
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState<{
+    id: string;
+    name: string;
+    courseCode: string;
+  } | null>(null);
+  const [isRandomizing, setIsRandomizing] = React.useState(false);
+  const [isAllocating, setIsAllocating] = React.useState(false);
+  const [lecturerNames, setLecturerNames] = React.useState<
+    Record<string, string>
+  >({});
 
   React.useEffect(() => {
     try {
-      const saved = localStorage.getItem('useMock');
+      const saved = localStorage.getItem("useMock");
       if (saved !== null) {
-        setUseMock(saved === 'true');
+        setUseMock(saved === "true");
       }
     } catch {}
   }, []);
 
   React.useEffect(() => {
-    ;(async () => {
+    (async () => {
       try {
-        const list = useMock ? await getCoursesMock() : await CourseService.getCourses()
+        const list = useMock
+          ? await getCoursesMock()
+          : await CourseService.getCourses();
         // Chỉ ẩn các course Inactive; mặc định coi thiếu status là Active
-        const activeCourses = (list || []).filter(c => String(c.status || 'active').toLowerCase() !== 'inactive')
-        setCourses(activeCourses)
+        const activeCourses = (list || []).filter(
+          (c) => String(c.status || "active").toLowerCase() !== "inactive"
+        );
+        setCourses(activeCourses);
         // Reset lựa chọn khi danh sách thay đổi
         if (activeCourses.length > 0) {
           const first = activeCourses[0]
@@ -115,27 +151,30 @@ export default function AdminGroupsPage() {
           await loadCourseLecturer(first.courseId, first.courseCode)
         } else {
           // Không có course Active -> clear selection
-          setSelectedCourseId("")
-          setSelectedCourseCode("")
-          setSelectedCourseName("")
-          setGroups([])
-          setEmptyCount(null)
+          setSelectedCourseId("");
+          setSelectedCourseCode("");
+          setSelectedCourseName("");
+          setGroups([]);
+          setEmptyCount(null);
         }
       } catch (err) {
-        toast({ title: "Lỗi", description: "Không thể tải danh sách môn học." })
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải danh sách môn học.",
+        });
       }
-    })()
-  }, [useMock])
+    })();
+  }, [useMock]);
 
   const loadEmptyCount = async (courseCode: string) => {
-    if (!courseCode) return
-    setLoadingCount(true)
-    setEmptyCount(null)
+    if (!courseCode) return;
+    setLoadingCount(true);
+    setEmptyCount(null);
     try {
-      let countEmpty = 0
+      let countEmpty = 0;
       if (useMock) {
-        const list = mockGroups.filter(g => g.courseCode === courseCode)
-        countEmpty = list.filter(g => (g.memberCount ?? 0) === 0).length
+        const list = mockGroups.filter((g) => g.courseCode === courseCode);
+        countEmpty = list.filter((g) => (g.memberCount ?? 0) === 0).length;
       } else {
         const res = await fetch(`/api/proxy/Group/GetGroupByCourseCode/count/${encodeURIComponent(courseCode)}`, {
           cache: 'no-store',
@@ -147,8 +186,10 @@ export default function AdminGroupsPage() {
           },
         })
         if (!res.ok) {
-          const text = await res.text().catch(() => '')
-          throw new Error(`GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`)
+          const text = await res.text().catch(() => "");
+          throw new Error(
+            `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`
+          );
         }
         const groups = await res.json()
         countEmpty = groups.length
@@ -156,59 +197,76 @@ export default function AdminGroupsPage() {
       setEmptyCount(countEmpty)
       // Loại bỏ thông báo khi không có nhóm trống
     } catch (err) {
-      toast({ title: "Lỗi", description: "Không thể tải nhóm của môn học." })
+      toast({ title: "Lỗi", description: "Không thể tải nhóm của môn học." });
     } finally {
-      setLoadingCount(false)
+      setLoadingCount(false);
     }
-  }
+  };
 
   const handleCourseChange = (courseId: string) => {
-    setSelectedCourseId(courseId)
-    const c = courses.find(c => c.courseId === courseId)
-    setSelectedCourseCode(c?.courseCode || "")
-    setSelectedCourseName(c?.courseName || "")
+    setSelectedCourseId(courseId);
+    const c = courses.find((c) => c.courseId === courseId);
+    setSelectedCourseCode(c?.courseCode || "");
+    setSelectedCourseName(c?.courseName || "");
     if (c?.courseCode) {
-      loadGroups(c.courseCode)
-      loadEmptyCount(c.courseCode)
-      loadCourseLecturer(courseId, c.courseCode)
+      loadGroups(c.courseCode);
+      loadEmptyCount(c.courseCode);
+      loadCourseLecturer(courseId, c.courseCode);
     }
-  }
+  };
 
   const refreshEmptyCount = React.useCallback(() => {
     if (selectedCourseCode) {
-      loadEmptyCount(selectedCourseCode)
+      loadEmptyCount(selectedCourseCode);
     }
-  }, [selectedCourseCode])
-
-  const loadCourseLecturer = React.useCallback(async (courseId: string, courseCode: string) => {
-    try {
-      if (!courseId) { setCourseLecturerId(""); setCourseLecturerName("—"); return }
-      if (useMock) {
-        const cid = courses.find(c => c.courseId === courseId)?.lecturerId || ""
-        setCourseLecturerId(cid)
-        const u = mockUsers.find(u => u.userId === cid)
-        setCourseLecturerName(u?.fullName || '—')
-      } else {
-        const mapping = await LecturerCourseService.getApiLecturerCourseByCourses({ coursesId: courseId })
-        let lecturerId = ""
-        if (Array.isArray(mapping) && mapping.length > 0) lecturerId = mapping[0]?.lecturerId || ""
-        else if (mapping && typeof mapping === 'object') lecturerId = (mapping as any)?.lecturerId || ""
-        setCourseLecturerId(lecturerId)
-        let name = '—'
-        if (lecturerId) {
-          try {
-            const user = await UserService.getApiUser1({ id: lecturerId })
-            name = user?.userProfile?.fullName || user?.username || user?.email || '—'
-          } catch {}
+  }, [selectedCourseCode]);
+// Load lecturer for the selected course
+  const loadCourseLecturer = React.useCallback(
+    async (courseId: string, courseCode: string) => {
+      try {
+        if (!courseId) {
+          setCourseLecturerId("");
+          setCourseLecturerName("—");
+          return;
         }
-        setCourseLecturerName(name)
+        if (useMock) {
+          const cid =
+            courses.find((c) => c.courseId === courseId)?.lecturerId || "";
+          setCourseLecturerId(cid);
+          const u = mockUsers.find((u) => u.userId === cid);
+          setCourseLecturerName(u?.fullName || "—");
+        } else {
+          const mapping =
+            await LecturerCourseService.getApiLecturerCourseByCourses({
+              coursesId: courseId,
+            });
+          let lecturerId = "";
+          if (Array.isArray(mapping) && mapping.length > 0)
+            lecturerId = mapping[0]?.lecturerId || "";
+          else if (mapping && typeof mapping === "object")
+            lecturerId = (mapping as any)?.lecturerId || "";
+          setCourseLecturerId(lecturerId);
+          let name = "—";
+          if (lecturerId) {
+            try {
+              const user = await UserService.getApiUser1({ id: lecturerId });
+              name =
+                user?.userProfile?.fullName ||
+                user?.username ||
+                user?.email ||
+                "—";
+            } catch {}
+          }
+          setCourseLecturerName(name);
+        }
+      } catch (err) {
+        console.warn("Load course lecturer failed", err);
+        setCourseLecturerId("");
+        setCourseLecturerName("—");
       }
-    } catch (err) {
-      console.warn('Load course lecturer failed', err)
-      setCourseLecturerId("")
-      setCourseLecturerName('—')
-    }
-  }, [useMock, courses])
+    },
+    [useMock, courses]
+  );
 
   // Map API group to table row
   const mapApiGroupToRow = React.useCallback((g: any) => {
@@ -300,6 +358,10 @@ export default function AdminGroupsPage() {
           const list = Array.isArray(all) ? all.filter((g: any) => (g?.course?.courseCode || g?.courseCode) === courseCode) : []
           rows = list.map(mapApiGroupToRow)
         }
+        setGroups(rows);
+      } catch (err) {
+        console.error(err);
+        toast({ title: "Lỗi", description: "Không thể tải danh sách nhóm." });
       }
       setGroups(rows)
     } catch (err) {
@@ -309,57 +371,98 @@ export default function AdminGroupsPage() {
   }, [mapApiGroupToRow, toast, useMock, courses, courseLecturerName, selectedCourseCode])
 
   React.useEffect(() => {
-    ;(async () => {
-      const ids = new Set<string>()
-      groups.forEach(g => { const id = g.lecturerId; if (id && !lecturerNames[id]) ids.add(id) })
-      if (ids.size === 0) return
-      const copy = { ...lecturerNames }
-      await Promise.all(Array.from(ids).map(async id => {
-        try { const u = await UserService.getApiUser1({ id }); copy[id] = u?.userProfile?.fullName || u?.username || u?.email || '—' } catch { copy[id] = '—' }
-      }))
-      setLecturerNames(copy)
-    })()
-  }, [groups])
+    (async () => {
+      const ids = new Set<string>();
+      groups.forEach((g) => {
+        const id = g.lecturerId;
+        if (id && !lecturerNames[id]) ids.add(id);
+      });
+      if (ids.size === 0) return;
+      const copy = { ...lecturerNames };
+      await Promise.all(
+        Array.from(ids).map(async (id) => {
+          try {
+            const u = await UserService.getApiUser1({ id });
+            copy[id] =
+              u?.userProfile?.fullName || u?.username || u?.email || "—";
+          } catch {
+            copy[id] = "—";
+          }
+        })
+      );
+      setLecturerNames(copy);
+    })();
+  }, [groups]);
 
   // Random Leader cho các nhóm có thành viên nhưng chưa có Leader
   const handleRandomizeLeaders = React.useCallback(async () => {
-    const targetGroups = groups.filter(g => (g.memberCount > 0) && !g.hasLeader)
+    const targetGroups = groups.filter(
+      (g) => g.memberCount > 0 && !g.hasLeader
+    );
 
     if (targetGroups.length === 0) {
-      toast({ title: "Không cần xử lý", description: "Tất cả các nhóm có thành viên đều đã có Leader." })
-      return
+      toast({
+        title: "Không cần xử lý",
+        description: "Tất cả các nhóm có thành viên đều đã có Leader.",
+      });
+      return;
     }
 
     if (!selectedCourseCode) {
-      toast({ title: "Thiếu thông tin", description: "Vui lòng chọn môn học." })
-      return
+      toast({
+        title: "Thiếu thông tin",
+        description: "Vui lòng chọn môn học.",
+      });
+      return;
     }
 
-    if (!confirm(`Tìm thấy ${targetGroups.length} nhóm chưa có Leader. Bạn có muốn chọn ngẫu nhiên không?`)) return
+    if (
+      !confirm(
+        `Tìm thấy ${targetGroups.length} nhóm chưa có Leader. Bạn có muốn chọn ngẫu nhiên không?`
+      )
+    )
+      return;
 
-    setIsRandomizing(true)
+    setIsRandomizing(true);
     try {
       const promises = targetGroups.map(async (g) => {
-        const members = Array.isArray(g.members) ? g.members : []
-        if (members.length === 0) return
-        const randomIndex = Math.floor(Math.random() * members.length)
-        const randomMember = members[randomIndex]
-        const leaderId = randomMember?.userId || randomMember?.studentId || randomMember?.id || ""
-        if (!leaderId) return
-        await GroupService.updateGroup(g.id, { leaderId, name: g.name })
-      })
-      const results = await Promise.allSettled(promises)
-      const successCount = results.filter(r => r.status === 'fulfilled').length
-      const failCount = results.length - successCount
-      toast({ title: successCount > 0 ? "Thành công" : "Lỗi", description: successCount > 0 ? `Đã cập nhật Leader cho ${successCount}/${results.length} nhóm.` : "Không thể cập nhật leader cho các nhóm." })
-      await loadGroups(selectedCourseCode)
+        const members = Array.isArray(g.members) ? g.members : [];
+        if (members.length === 0) return;
+        const randomIndex = Math.floor(Math.random() * members.length);
+        const randomMember = members[randomIndex];
+        const leaderId =
+          randomMember?.userId ||
+          randomMember?.studentId ||
+          randomMember?.id ||
+          "";
+        if (!leaderId) return;
+        await GroupService.updateGroup(g.id, { leaderId, name: g.name });
+      });
+      const results = await Promise.allSettled(promises);
+      const successCount = results.filter(
+        (r) => r.status === "fulfilled"
+      ).length;
+      const failCount = results.length - successCount;
+      toast({
+        title: successCount > 0 ? "Thành công" : "Lỗi",
+        description:
+          successCount > 0
+            ? `Đã cập nhật Leader cho ${successCount}/${results.length} nhóm.`
+            : "Không thể cập nhật leader cho các nhóm.",
+      });
+      await loadGroups(selectedCourseCode);
     } catch (error) {
-      console.error("Randomize leaders error:", error)
-      toast({ title: "Lỗi", description: String((error as any)?.message || "Có lỗi xảy ra khi random leader.") })
+      console.error("Randomize leaders error:", error);
+      toast({
+        title: "Lỗi",
+        description: String(
+          (error as any)?.message || "Có lỗi xảy ra khi random leader."
+        ),
+      });
     } finally {
-      setIsRandomizing(false)
+      setIsRandomizing(false);
     }
-  }, [groups, selectedCourseCode, toast, loadGroups])
+  }, [groups, selectedCourseCode, toast, loadGroups]);
 
   return (
     <DashboardLayout role="admin">
@@ -367,10 +470,17 @@ export default function AdminGroupsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Quản lý Nhóm</h1>
-            <p className="text-gray-600 mt-1">Chọn môn học và quản lý nhóm trống.</p>
+            <p className="text-gray-600 mt-1">
+              Chọn môn học và quản lý nhóm trống.
+            </p>
           </div>
         </div>
-        <ChangeMockData loading={loadingCount} onRefresh={refreshEmptyCount} useMock={useMock} setUseMock={setUseMock} />
+        <ChangeMockData
+          loading={loadingCount}
+          onRefresh={refreshEmptyCount}
+          useMock={useMock}
+          setUseMock={setUseMock}
+        />
         <Card>
           <CardHeader>
             <CardTitle>Quản lý nhóm</CardTitle>
@@ -378,12 +488,15 @@ export default function AdminGroupsPage() {
           <CardContent className="space-y-4">
             <div>
               <Label>Môn học</Label>
-              <Select value={selectedCourseId} onValueChange={handleCourseChange}>
+              <Select
+                value={selectedCourseId}
+                onValueChange={handleCourseChange}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Chọn môn học" />
                 </SelectTrigger>
                 <SelectContent>
-                  {courses.map(c => (
+                  {courses.map((c) => (
                     <SelectItem key={c.courseId} value={c.courseId}>
                       {c.courseCode} - {c.courseName}
                     </SelectItem>
@@ -392,13 +505,24 @@ export default function AdminGroupsPage() {
               </Select>
             </div>
             <div className="flex items-center gap-2">
-              <Button onClick={() => setDialogOpen(true)} disabled={!selectedCourseId}>Tạo Nhóm Trống</Button>
+              <Button
+                onClick={() => setDialogOpen(true)}
+                disabled={!selectedCourseId}
+              >
+                Tạo Nhóm Trống
+              </Button>
               <Button
                 variant="secondary"
                 disabled={!selectedCourseCode || isAllocating}
                 onClick={async () => {
-                  if (!selectedCourseCode) { toast({ title: "Thiếu thông tin", description: "Vui lòng chọn môn học." }); return }
-                  setIsAllocating(true)
+                  if (!selectedCourseCode) {
+                    toast({
+                      title: "Thiếu thông tin",
+                      description: "Vui lòng chọn môn học.",
+                    });
+                    return;
+                  }
+                  setIsAllocating(true);
                   try {
                     // Use the TeamAllocation API
                     console.log("🚀 [Allocate Teams] Calling API with courseName:", selectedCourseCode.toLowerCase());
@@ -421,16 +545,22 @@ export default function AdminGroupsPage() {
                     await loadGroups(selectedCourseCode)
                     await loadEmptyCount(selectedCourseCode)
                   } catch (err: any) {
-                    console.error("Allocation error:", err)
-                    toast({ title: "Lỗi", description: err?.message || "Không thể chạy phân bổ tự động." })
-                  } finally { setIsAllocating(false) }
+                    console.error("Allocation error:", err);
+                    toast({
+                      title: "Lỗi",
+                      description:
+                        err?.message || "Không thể chạy phân bổ tự động.",
+                    });
+                  } finally {
+                    setIsAllocating(false);
+                  }
                 }}
               >
                 Phân bổ tự động
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={handleRandomizeLeaders} 
+              <Button
+                variant="outline"
+                onClick={handleRandomizeLeaders}
                 disabled={isRandomizing || !selectedCourseCode}
               >
                 <Shuffle className="w-4 h-4 mr-2" /> Random Leader
@@ -460,9 +590,13 @@ export default function AdminGroupsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tất cả</SelectItem>
-                    {mockUsers.filter(u => u.role === 'lecturer').map(u => (
-                      <SelectItem key={u.userId} value={u.userId}>{u.fullName}</SelectItem>
-                    ))}
+                    {mockUsers
+                      .filter((u) => u.role === "lecturer")
+                      .map((u) => (
+                        <SelectItem key={u.userId} value={u.userId}>
+                          {u.fullName}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -471,18 +605,20 @@ export default function AdminGroupsPage() {
             {/* Thống kê nhanh */}
             <div className="text-sm text-gray-700 flex items-center gap-4">
               <span>Tổng nhóm: {groups.length}</span>
-              <span>Nhóm trống: {groups.filter(g => g.memberCount === 0).length}</span>
+              <span>
+                Nhóm trống: {groups.filter((g) => g.memberCount === 0).length}
+              </span>
               {selectedCourseId && (
                 <span className="text-gray-600">
                   {loadingCount
                     ? "Đang kiểm tra nhóm trống..."
                     : emptyCount === null
-                      ? "Chưa kiểm tra"
-                      : (emptyCount === 0
-                          ? (groups.length === 0
-                              ? "Chưa khởi tạo nhóm."
-                              : "Tất cả các nhóm đều đã có thành viên hoạt động.")
-                          : `Khoá ${selectedCourseCode} đang có ${emptyCount} nhóm trống.`)}
+                    ? "Chưa kiểm tra"
+                    : emptyCount === 0
+                    ? groups.length === 0
+                      ? "Chưa khởi tạo nhóm."
+                      : "Tất cả các nhóm đều đã có thành viên hoạt động."
+                    : `Khoá ${selectedCourseCode} đang có ${emptyCount} nhóm trống.`}
                 </span>
               )}
             </div>
@@ -541,15 +677,24 @@ export default function AdminGroupsPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => {
-                                const c = courses.find(c => c.courseCode === g.courseCode)
-                                setEditTarget({ id: g.id, name: g.name, courseCode: g.courseCode })
-                                if (c?.courseId) loadCourseLecturer(c.courseId, c.courseCode)
-                                setEditOpen(true)
-                              }}  
+                                const c = courses.find(
+                                  (c) => c.courseCode === g.courseCode
+                                );
+                                setEditTarget({
+                                  id: g.id,
+                                  name: g.name,
+                                  courseCode: g.courseCode,
+                                });
+                                if (c?.courseId)
+                                  loadCourseLecturer(c.courseId, c.courseCode);
+                                setEditOpen(true);
+                              }}
                             >
                               Sửa
                             </Button>
-                            <Button variant="destructive" size="sm">Xóa</Button>
+                            <Button variant="destructive" size="sm">
+                              Xóa
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -566,10 +711,10 @@ export default function AdminGroupsPage() {
           isOpen={dialogOpen}
           onClose={() => setDialogOpen(false)}
           onSuccess={() => {
-            setDialogOpen(false)
+            setDialogOpen(false);
             if (selectedCourseCode) {
-              loadGroups(selectedCourseCode)
-              loadEmptyCount(selectedCourseCode)
+              loadGroups(selectedCourseCode);
+              loadEmptyCount(selectedCourseCode);
             }
           }}
           initialCourseId={selectedCourseId}
@@ -579,23 +724,29 @@ export default function AdminGroupsPage() {
         <EditGroupDialog
           isOpen={editOpen}
           onClose={() => setEditOpen(false)}
-          groupId={editTarget?.id || ''}
-          groupName={editTarget?.name || ''}
+          groupId={editTarget?.id || ""}
+          groupName={editTarget?.name || ""}
           courseId={selectedCourseId}
           courseCode={selectedCourseCode}
           useMock={useMock}
           onSuccess={(newLecturerId) => {
-            setEditOpen(false)
+            setEditOpen(false);
             if (useMock) {
-              setCourses(prev => prev.map(c => c.courseId === selectedCourseId ? { ...c, lecturerId: newLecturerId } : c))
+              setCourses((prev) =>
+                prev.map((c) =>
+                  c.courseId === selectedCourseId
+                    ? { ...c, lecturerId: newLecturerId }
+                    : c
+                )
+              );
             }
-            loadCourseLecturer(selectedCourseId, selectedCourseCode)
+            loadCourseLecturer(selectedCourseId, selectedCourseCode);
             if (selectedCourseCode) {
-              loadGroups(selectedCourseCode)
+              loadGroups(selectedCourseCode);
             }
           }}
         />
       </div>
     </DashboardLayout>
-  )
+  );
 }

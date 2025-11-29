@@ -81,6 +81,15 @@ const mapApiGroupToFeGroup = (g: any): FeGroup => {
       // Temporarily keep the current logic, will enhance later if needed
     }
 
+    const fallbackCourseCode =
+      g.course?.courseCode || g.courseCode || gm.courseCode || "N/A";
+    const fallbackCourseName =
+      g.courseName || g.course?.courseName || gm.courseName || "N/A";
+    const fallbackSemester =
+      g.course?.semester || gm.semester || "Unknown Semester";
+    const fallbackYear = g.course?.year || gm.year || new Date().getFullYear();
+    const fallbackLecturerId = g.course?.lecturerId || gm.lecturerId || "";
+
     return {
       userId: gm.userId || gm.studentId || gm.id || "",
       fullName,
@@ -95,6 +104,13 @@ const mapApiGroupToFeGroup = (g: any): FeGroup => {
       major: (student?.major?.majorCode || student?.majorCode || "SE") as
         | "SE"
         | "SS",
+      courseId: g.courseId || gm.courseId || "",
+      courseCode: fallbackCourseCode,
+      courseName: fallbackCourseName,
+      semester: fallbackSemester,
+      year: fallbackYear,
+      lecturerId: fallbackLecturerId,
+      description: gm.description || "",
       // Add API compatibility fields
       username: gm.username || student?.username || "",
       email: gm.email || student?.email || "",

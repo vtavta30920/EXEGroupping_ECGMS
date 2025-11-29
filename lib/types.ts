@@ -77,6 +77,7 @@ export interface GroupNeeds {
 // ===== GROUP TYPES =====
 export interface Group {
   groupId: string;
+  id?: string; // Alias để tương thích với FE cũ
   groupName: string;
   // API compatibility aliases
   name?: string; // Alias for groupName
