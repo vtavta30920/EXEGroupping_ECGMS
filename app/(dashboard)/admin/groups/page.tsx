@@ -104,20 +104,13 @@ export default function AdminGroupsPage() {
   // Hydration-safe default: start with true on both server and client,
   // then read persisted value after mount to avoid mismatch.
   const [useMock, setUseMock] = React.useState<boolean>(true);
-  const [courseLecturerId, setCourseLecturerId] = React.useState<string>("");
-  const [courseLecturerName, setCourseLecturerName] =
-    React.useState<string>("—");
-  const [editOpen, setEditOpen] = React.useState(false);
-  const [editTarget, setEditTarget] = React.useState<{
-    id: string;
-    name: string;
-    courseCode: string;
-  } | null>(null);
-  const [isRandomizing, setIsRandomizing] = React.useState(false);
-  const [isAllocating, setIsAllocating] = React.useState(false);
-  const [lecturerNames, setLecturerNames] = React.useState<
-    Record<string, string>
-  >({});
+  const [courseLecturerId, setCourseLecturerId] = React.useState<string>("")
+  const [courseLecturerName, setCourseLecturerName] = React.useState<string>("—")
+  const [editOpen, setEditOpen] = React.useState(false)
+  const [editTarget, setEditTarget] = React.useState<{ id: string; name: string; courseCode: string; courseId?: string; lecturerId?: string } | null>(null)
+  const [isRandomizing, setIsRandomizing] = React.useState(false)
+  const [isAllocating, setIsAllocating] = React.useState(false)
+  const [lecturerNames, setLecturerNames] = React.useState<Record<string, string>>({})
 
   React.useEffect(() => {
     try {
@@ -276,8 +269,9 @@ export default function AdminGroupsPage() {
     const currentCourse = courses.find(c => c.courseCode === (g.course?.courseCode || g.courseCode || ''));
     const maxMembers = currentCourse?.maxMembers || g.maxMembers || 5
     const status = g.status || (memberCount >= maxMembers ? 'finalize' : (memberCount === 0 ? 'open' : 'open'))
-    const lecturerId = g.lectureId || g.lecturerId || g.course?.lecturerId || ''
-    const lecturerName = courseLecturerName || '—'
+    const lecturerId = g.lectureId || g.lecturerId || g.course?.lecturerId || g.lecturer?.lecturerId || ''
+    // Display only lecturer.fullname from API when available
+    const lecturerName = g.lecturer?.fullname || g.lecturer?.fullName || '—'
     const leader = members.find((m: any) => {
       const r = String(m.role ?? m.roleInGroup ?? '').toLowerCase()
       return r === 'leader' || r === 'group leader' || m.isLeader === true
@@ -659,7 +653,7 @@ export default function AdminGroupsPage() {
                 <span className="text-xs text-gray-500">{g.summary ?? `${g.hasLeader ? '1 Leader' : '0 Leader'} • ${(g.hasLeader ? Math.max(g.memberCount - 1, 0) : g.memberCount)} Members`}</span>
               </div>
             </TableCell>
-                        <TableCell>{g.lecturerId ? (lecturerNames[g.lecturerId] || '—') : g.lecturerName}</TableCell>
+                        <TableCell>{g.lecturerName || (g.lecturerId ? (lecturerNames[g.lecturerId] || '—') : '—')}</TableCell>
                         <TableCell>
                           {(() => {
                             const currentCourse = courses.find(c => c.courseCode === g.courseCode);
@@ -723,10 +717,13 @@ export default function AdminGroupsPage() {
 
         <EditGroupDialog
           isOpen={editOpen}
-          onClose={() => setEditOpen(false)}
-          groupId={editTarget?.id || ""}
-          groupName={editTarget?.name || ""}
-          courseId={selectedCourseId}
+          onClose={() => {
+            console.log('🔴 [AdminGroupsPage] Closing EditGroupDialog');
+            setEditOpen(false)
+          }}
+          groupId={editTarget?.id || ''}
+          groupName={editTarget?.name || ''}
+          courseId={editTarget?.courseId || selectedCourseId}
           courseCode={selectedCourseCode}
           useMock={useMock}
           onSuccess={(newLecturerId) => {
