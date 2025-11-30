@@ -26,6 +26,9 @@ export default function StudentGroupDetailPage() {
   const [topicOpen, setTopicOpen] = React.useState(false)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [leaveOpen, setLeaveOpen] = React.useState(false)
+  const [transferOpen, setTransferOpen] = React.useState(false)
+  const [newLeaderId, setNewLeaderId] = React.useState<string>("")
+  const [transferSubmitting, setTransferSubmitting] = React.useState(false)
   const [kickOpen, setKickOpen] = React.useState(false)
   const [kickMember, setKickMember] = React.useState<any>(null)
   const [topics, setTopics] = React.useState<any[]>([])
@@ -212,6 +215,39 @@ export default function StudentGroupDetailPage() {
     } catch { setLeaveOpen(false) }
   }
 
+  async function handleTransferAndLeave() {
+    // Called when leader selects a new leader and wants to leave
+    if (!newLeaderId || !groupId) {
+      setTransferOpen(false)
+      return
+    }
+    setTransferSubmitting(true)
+    try {
+      // Update group leader
+      await GroupService.updateGroup(groupId, { leaderId: newLeaderId })
+      // Then leave as the previous leader
+      const userIdToUse = getUserIdFromJWT() || user?.userId;
+      if (userIdToUse) {
+        await GroupService.leaveGroup(groupId, userIdToUse)
+      }
+
+      // Update local user state
+      if (user) {
+        const updatedUser = { ...user, groupId: null };
+        updateCurrentUser(updatedUser);
+        window.dispatchEvent(new CustomEvent('userStateChanged'));
+      }
+
+      setTransferOpen(false)
+      router.push("/student/group")
+    } catch (err) {
+      console.error('❌ [handleTransferAndLeave] Error:', err)
+      setTransferOpen(false)
+    } finally {
+      setTransferSubmitting(false)
+    }
+  }
+
   async function toggleLock() {
     if (!isLeader) return
     try {
@@ -365,7 +401,15 @@ export default function StudentGroupDetailPage() {
                     <UserPlus className="w-4 h-4 mr-2" /> Mời thành viên
                   </Button>
                 ) : null}
-                <Button variant="destructive" onClick={() => setLeaveOpen(true)}>Rời nhóm</Button>
+                <Button variant="destructive" onClick={() => {
+                  // If current user is leader and there are other members, require transfer first
+                  const memberCount = group?.members ? group.members.length : (group?.memberCount || 0)
+                  if (isLeader && memberCount > 1) {
+                    setTransferOpen(true)
+                  } else {
+                    setLeaveOpen(true)
+                  }
+                }}>Rời nhóm</Button>
               </CardContent>
             </Card>
           </div>
@@ -424,6 +468,38 @@ export default function StudentGroupDetailPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Transfer leader dialog: required when current user is leader and group has other members */}
+        <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Chuyển nhượng Trưởng nhóm</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="text-sm">Bạn là Trưởng nhóm. Trước khi rời nhóm, vui lòng chuyển nhượng quyền Trưởng cho một thành viên khác.</div>
+              <div className="space-y-2 max-h-64 overflow-auto">
+                {(group?.members || []).filter((m: any) => String(m.userId) !== String(user?.userId)).map((m: any) => (
+                  <div key={m.userId} className="flex items-center justify-between p-2 rounded hover:bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      <img src={m.avatarUrl || '/placeholder-user.jpg'} className="w-8 h-8 rounded-full" alt="avatar" />
+                      <div>
+                        <div className="font-medium">{m.fullName || m.username || m.email}</div>
+                        <div className="text-xs text-gray-500">{m.major || ''}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <input type="radio" name="newLeader" value={m.userId} checked={newLeaderId === String(m.userId)} onChange={() => setNewLeaderId(String(m.userId))} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setTransferOpen(false)}>Huỷ</Button>
+              <Button disabled={!newLeaderId || transferSubmitting} onClick={handleTransferAndLeave}>{transferSubmitting ? 'Đang xử lý...' : 'Chuyển và Rời'}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={kickOpen} onOpenChange={setKickOpen}>
           <AlertDialogContent>
