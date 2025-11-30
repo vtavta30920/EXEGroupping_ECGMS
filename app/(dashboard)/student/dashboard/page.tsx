@@ -91,6 +91,35 @@ export default function StudentDashboard() {
           setActiveCourses(list)
           setGroup(null)
           setTasks([])
+
+          // Auto-select first course and load groups so dashboard shows available groups immediately
+          if (list.length > 0) {
+            const firstCode = list[0].courseCode || ''
+            setSelectedCourseCode(firstCode)
+            setLoadingGroups(true)
+            try {
+              const res = await fetch(`/api/proxy/Group/GetAllGroups?CourseCode=${encodeURIComponent((firstCode || '').toLowerCase())}`, { cache: 'no-store' })
+              if (res.ok) {
+                const data = await res.json()
+                const list = Array.isArray(data) ? data : []
+                const normalized = list.map((d: any) => ({
+                  groupId: d.groupId || d.id || d.Id || d.GroupId || d.groupID || d.GroupID || '',
+                  name: d.name || d.groupName || d.group_name || d.GroupName || d.groupName || '',
+                  memberCount: (d.countMembers ?? d.memberCount ?? (Array.isArray(d.members) ? d.members.length : undefined)) || 0,
+                  raw: d,
+                }))
+                setAvailableGroups(normalized)
+              } else {
+                console.warn('Failed to load groups for course', firstCode, res.status)
+                setAvailableGroups([])
+              }
+            } catch (err) {
+              console.error('Error loading groups:', err)
+              setAvailableGroups([])
+            } finally {
+              setLoadingGroups(false)
+            }
+          }
         }
       } finally {
         setLoading(false)
@@ -136,6 +165,35 @@ export default function StudentDashboard() {
           setActiveCourses(list)
           setGroup(null)
           setTasks([])
+
+          // Auto-select first course and load groups on reload as well
+          if (list.length > 0) {
+            const firstCode = list[0].courseCode || ''
+            setSelectedCourseCode(firstCode)
+            setLoadingGroups(true)
+            try {
+              const res = await fetch(`/api/proxy/Group/GetAllGroups?CourseCode=${encodeURIComponent((firstCode || '').toLowerCase())}`, { cache: 'no-store' })
+              if (res.ok) {
+                const data = await res.json()
+                const list2 = Array.isArray(data) ? data : []
+                const normalized = list2.map((d: any) => ({
+                  groupId: d.groupId || d.id || d.Id || d.GroupId || d.groupID || d.GroupID || '',
+                  name: d.name || d.groupName || d.group_name || d.GroupName || d.groupName || '',
+                  memberCount: (d.countMembers ?? d.memberCount ?? (Array.isArray(d.members) ? d.members.length : undefined)) || 0,
+                  raw: d,
+                }))
+                setAvailableGroups(normalized)
+              } else {
+                console.warn('Failed to load groups for course', firstCode, res.status)
+                setAvailableGroups([])
+              }
+            } catch (err) {
+              console.error('Error loading groups:', err)
+              setAvailableGroups([])
+            } finally {
+              setLoadingGroups(false)
+            }
+          }
         }
       } finally {
         setLoading(false)
@@ -176,7 +234,7 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {!loading && !user?.groupId && (
+        {!loading && !group && (
           <Card className="border-amber-200 bg-amber-50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-amber-600" /> Bạn chưa tham gia nhóm</CardTitle>
@@ -196,7 +254,14 @@ export default function StudentDashboard() {
                           const res = await fetch(`/api/proxy/Group/GetAllGroups?CourseCode=${encodeURIComponent((c.courseCode || '').toLowerCase())}`, { cache: 'no-store' })
                           if (res.ok) {
                             const data = await res.json()
-                            setAvailableGroups(Array.isArray(data) ? data : [])
+                            const list = Array.isArray(data) ? data : []
+                            const normalized = list.map((d: any) => ({
+                              groupId: d.groupId || d.id || d.Id || d.GroupId || d.groupID || d.GroupID || '',
+                              name: d.name || d.groupName || d.group_name || d.GroupName || d.groupName || '',
+                              memberCount: (d.countMembers ?? d.memberCount ?? (Array.isArray(d.members) ? d.members.length : undefined)) || 0,
+                              raw: d,
+                            }))
+                            setAvailableGroups(normalized)
                           } else {
                             console.warn('Failed to load groups for course', c.courseCode, res.status)
                             setAvailableGroups([])
@@ -225,23 +290,24 @@ export default function StudentDashboard() {
                       <div className="text-sm text-gray-500">Chưa có nhóm. Hãy chọn môn khác hoặc tạo nhóm mới.</div>
                     ) : (
                       availableGroups.map((g: any) => (
-                        <div key={g.id || g.groupId} className="p-3 border rounded flex items-center justify-between">
+                        <div key={g.groupId || g.raw?.id || g.raw?.Id || Math.random()} className="p-3 border rounded flex items-center justify-between">
                           <div>
-                            <div className="font-medium">{g.name || g.groupName}</div>
-                            <div className="text-sm text-gray-600">{(g.countMembers ?? g.memberCount) || (g.members ? g.members.length : 0)} thành viên</div>
+                            <div className="font-medium">{g.name || g.raw?.groupName || g.raw?.name}</div>
+                            <div className="text-sm text-gray-600">{(g.memberCount ?? g.raw?.memberCount ?? (Array.isArray(g.raw?.members) ? g.raw.members.length : 0))} thành viên</div>
                           </div>
                           <div>
                             <Button size="sm" onClick={async () => {
                               if (!user) return
                               try {
                                 const uid = user.userId
-                                await GroupService.joinGroup(g.id || g.groupId, uid)
+                                const gid = g.groupId || g.raw?.id || g.raw?.Id
+                                await GroupService.joinGroup(gid, uid)
                                 // refresh dashboard
                                 const cur = getCurrentUser()
                                 if (cur) updateCurrentUser(cur)
                                 window.dispatchEvent(new CustomEvent('userStateChanged'))
                                 // navigate to group detail
-                                router.push(`/student/groups/${g.id || g.groupId}`)
+                                router.push(`/student/groups/${gid}`)
                               } catch (err) {
                                 console.error('Join group failed', err)
                               }

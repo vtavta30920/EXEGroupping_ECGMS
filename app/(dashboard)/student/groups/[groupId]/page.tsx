@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -42,23 +42,39 @@ export default function StudentGroupDetailPage() {
 
   const isLeader = React.useMemo(() => {
     const uid = user?.userId || user?.id
+    
+    // Primary check: check if user has roleInGroup = 'leader' in members list
+    const isLeaderByRole = group?.members?.some((m: any) => {
+      const memberUserId = String(m.userId || '')
+      const currentUserId = String(uid || '')
+      const memberRole = String(m.roleInGroup || m.role || '').toLowerCase()
+      const isMatch = memberUserId === currentUserId && memberRole === 'leader'
+      
+      if (isMatch) {
+        console.log("👑 [isLeader] Found leader by roleInGroup:", {
+          memberUserId,
+          currentUserId,
+          memberRole,
+          roleInGroup: m.roleInGroup,
+          role: m.role
+        })
+      }
+      return isMatch
+    }) || false
+
+    // Fallback: check if user is group leader by leaderId
     const leaderId = group?.leaderId
-    const isLeaderCheck = Boolean(uid && leaderId && String(leaderId) === String(uid))
+    const isLeaderByLeaderId = Boolean(uid && leaderId && String(leaderId) === String(uid))
 
-    // Alternative check: check if user has roleInGroup = 'leader' in members list
-    const isLeaderByRole = group?.members?.some((m: any) =>
-      String(m.userId) === String(uid) && String(m.roleInGroup || m.role || '').toLowerCase() === 'leader'
-    ) || false
+    const finalIsLeader = isLeaderByRole || isLeaderByLeaderId
 
-    const finalIsLeader = isLeaderCheck || isLeaderByRole
-
-    console.log("👑 [isLeader] Check:", {
+    console.log("👑 [isLeader] Final check:", {
       uid,
-      leaderId,
-      isLeaderCheck,
       isLeaderByRole,
+      isLeaderByLeaderId,
       finalIsLeader,
-      groupLeaderId: group?.leaderId
+      groupLeaderId: group?.leaderId,
+      memberCount: group?.members?.length
     })
     return finalIsLeader
   }, [user, group])
@@ -223,13 +239,44 @@ export default function StudentGroupDetailPage() {
     }
     setTransferSubmitting(true)
     try {
-      // Update group leader
-      await GroupService.updateGroup(groupId, { leaderId: newLeaderId })
-      // Then leave as the previous leader
       const userIdToUse = getUserIdFromJWT() || user?.userId;
-      if (userIdToUse) {
-        await GroupService.leaveGroup(groupId, userIdToUse)
+      
+      if (!userIdToUse) {
+        throw new Error('Cannot identify current user');
       }
+
+      // Step 1: Update the new member's role to Leader using PUT /api/GroupMember/UpdateRoleInGroup/{GroupId}?userId={UserId}
+      console.log("🔄 [handleTransferAndLeave] Step 1: Promoting new member to leader:", newLeaderId);
+      const updateRoleResponse = await fetch(`/api/proxy/GroupMember/UpdateRoleInGroup/${groupId}?userId=${newLeaderId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          roleInGroup: 'Leader',
+        }),
+      });
+
+      if (!updateRoleResponse.ok) {
+        const errorText = await updateRoleResponse.text().catch(() => 'Unknown error');
+        throw new Error(`Failed to promote new leader: ${updateRoleResponse.status} ${updateRoleResponse.statusText} ${errorText}`);
+      }
+      console.log("✅ [handleTransferAndLeave] Step 1 completed: New leader promoted successfully");
+
+      // Step 2: Remove current leader (yourself) from the group
+      console.log("🔄 [handleTransferAndLeave] Step 2: Removing current leader from group:", userIdToUse);
+      const deleteResponse = await fetch(`/api/proxy/GroupMember/${userIdToUse}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!deleteResponse.ok) {
+        const errorText = await deleteResponse.text().catch(() => 'Unknown error');
+        throw new Error(`Failed to remove current leader: ${deleteResponse.status} ${deleteResponse.statusText} ${errorText}`);
+      }
+      console.log("✅ [handleTransferAndLeave] Step 2 completed: Current leader removed");
 
       // Update local user state
       if (user) {
@@ -242,6 +289,7 @@ export default function StudentGroupDetailPage() {
       router.push("/student/group")
     } catch (err) {
       console.error('❌ [handleTransferAndLeave] Error:', err)
+      alert(`Chuyển quyền trưởng nhóm thất bại: ${err instanceof Error ? err.message : 'Lỗi không xác định'}`)
       setTransferOpen(false)
     } finally {
       setTransferSubmitting(false)
