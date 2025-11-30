@@ -32,6 +32,9 @@ export default function StudentDashboard() {
   const [group, setGroup] = useState<any | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [activeCourses, setActiveCourses] = useState<any[]>([])
+  const [selectedCourseCode, setSelectedCourseCode] = useState<string>("")
+  const [availableGroups, setAvailableGroups] = useState<any[]>([])
+  const [loadingGroups, setLoadingGroups] = useState(false)
 
   useEffect(() => {
     const currentUser = getCurrentUser() as User | null
@@ -180,11 +183,75 @@ export default function StudentDashboard() {
               <CardDescription>Hãy tham gia nhóm để bắt đầu dự án. Danh sách môn học đang mở hiển thị bên dưới.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => router.push('/student/group')}>Tìm nhóm ngay</Button>
-              <div className="flex flex-wrap gap-2">
-                {activeCourses.map(c => (
-                  <Badge key={c.courseId} className="bg-blue-100 text-blue-700">{c.courseCode} — {c.courseName}</Badge>
-                ))}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Chọn môn để tìm nhóm</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {activeCourses.map(c => (
+                      <Button key={c.courseId} variant={selectedCourseCode === (c.courseCode || '') ? 'outline' : 'ghost'} onClick={async () => {
+                        setSelectedCourseCode(c.courseCode || '')
+                        // load groups for this course
+                        setLoadingGroups(true)
+                        try {
+                          const res = await fetch(`/api/proxy/Group/GetAllGroups?CourseCode=${encodeURIComponent((c.courseCode || '').toLowerCase())}`, { cache: 'no-store' })
+                          if (res.ok) {
+                            const data = await res.json()
+                            setAvailableGroups(Array.isArray(data) ? data : [])
+                          } else {
+                            console.warn('Failed to load groups for course', c.courseCode, res.status)
+                            setAvailableGroups([])
+                          }
+                        } catch (err) {
+                          console.error('Error loading groups:', err)
+                          setAvailableGroups([])
+                        } finally {
+                          setLoadingGroups(false)
+                        }
+                      }}>{c.courseCode} — {c.courseName}</Button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => router.push('/student/group')}>Tìm nhóm theo thao tác</Button>
+                </div>
+              </div>
+              <div className="mt-4">
+                <div className="text-sm font-medium mb-2">Danh sách nhóm cho: {selectedCourseCode || '—'}</div>
+                {loadingGroups ? (
+                  <div>Đang tải danh sách nhóm…</div>
+                ) : (
+                  <div className="space-y-2">
+                    {availableGroups.length === 0 ? (
+                      <div className="text-sm text-gray-500">Chưa có nhóm. Hãy chọn môn khác hoặc tạo nhóm mới.</div>
+                    ) : (
+                      availableGroups.map((g: any) => (
+                        <div key={g.id || g.groupId} className="p-3 border rounded flex items-center justify-between">
+                          <div>
+                            <div className="font-medium">{g.name || g.groupName}</div>
+                            <div className="text-sm text-gray-600">{(g.countMembers ?? g.memberCount) || (g.members ? g.members.length : 0)} thành viên</div>
+                          </div>
+                          <div>
+                            <Button size="sm" onClick={async () => {
+                              if (!user) return
+                              try {
+                                const uid = user.userId
+                                await GroupService.joinGroup(g.id || g.groupId, uid)
+                                // refresh dashboard
+                                const cur = getCurrentUser()
+                                if (cur) updateCurrentUser(cur)
+                                window.dispatchEvent(new CustomEvent('userStateChanged'))
+                                // navigate to group detail
+                                router.push(`/student/groups/${g.id || g.groupId}`)
+                              } catch (err) {
+                                console.error('Join group failed', err)
+                              }
+                            }}>Tham gia</Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -204,6 +271,9 @@ export default function StudentDashboard() {
                   <div className="font-semibold">{group.groupName}</div>
                   <div className="text-sm text-gray-600">Trạng thái: {group.status}</div>
                   <div className="text-sm text-gray-600">Mentor: {group.lecturerName || '—'}</div>
+                  <div className="pt-2">
+                    <Button onClick={() => router.push(`/student/groups/${group.groupId}`)}>Xem nhóm của tôi</Button>
+                  </div>
                 </div>
               ) : (
                 <div className="text-sm text-gray-600">Chưa tham gia nhóm</div>
