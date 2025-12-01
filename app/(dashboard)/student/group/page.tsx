@@ -21,6 +21,8 @@ import { GroupMemberService as GeneratedGroupMemberService } from "@/lib/api/gen
 export default function FindGroupsPage() {
   const router = useRouter()
   const { toast } = useToast()
+  // State để track việc đang redirect đến trang nhóm
+  const [isRedirecting, setIsRedirecting] = React.useState(false);
   // State để lưu danh sách nhóm và trạng thái tải
   const [groups, setGroups] = React.useState<Group[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -53,15 +55,81 @@ export default function FindGroupsPage() {
         if (onlyEmpty) filtered = filtered.filter(g => (g.memberCount || 0) === 0)
         setGroups(filtered)
       } else {
-        const data = await GroupService.getGroups();
-        let filtered = selectedCourse
-          ? data.filter(g => (g.courseCode || "").toUpperCase() === selectedCourse.toUpperCase())
-          : data;
-        if (onlyEmpty) filtered = filtered.filter(g => (g.memberCount || 0) === 0)
-        setGroups(filtered);
+        // Sử dụng API GetGroupByCourseCode giống như admin page
+        if (!selectedCourse) {
+          setGroups([]);
+          return;
+        }
+        
+        try {
+          const res = await fetch(`/api/proxy/Group/GetGroupByCourseCode/${encodeURIComponent(selectedCourse)}`, {
+            cache: 'no-store',
+            next: { revalidate: 0 },
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+            },
+          });
+          
+          if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`);
+          }
+          
+          const groupsRaw = await res.json();
+          const groupsArray = Array.isArray(groupsRaw) ? groupsRaw : [];
+          
+          // Map API response to FeGroup format
+          const mappedGroups = groupsArray.map((g: any) => {
+            const members = Array.isArray(g.groupMembers) ? g.groupMembers : (Array.isArray(g.members) ? g.members : []);
+            const memberCount = (g.countMembers ?? 0) || members.length;
+            
+            return {
+              groupId: g.id || g.groupId || '',
+              id: g.id || g.groupId || '',
+              groupName: g.name || g.groupName || 'Chưa đặt tên',
+              name: g.name || g.groupName || 'Chưa đặt tên',
+              courseId: g.course?.id || g.courseId || '',
+              courseCode: g.course?.courseCode || g.courseCode || selectedCourse,
+              courseName: g.course?.courseName || g.courseName || '',
+              memberCount,
+              maxMembers: g.maxMembers || 5,
+              leaderId: g.leaderId || (g.leader?.id ?? ''),
+              leaderName: g.leader?.fullName || g.leader?.fullname || '',
+              status: (g.status || (memberCount >= (g.maxMembers || 5) ? 'finalize' : 'open')) as 'open' | 'finalize' | 'private',
+              members: members.map((m: any) => ({
+                userId: m.userId || m.id || '',
+                fullName: m.fullName || m.user?.fullName || m.username || m.email || 'Thành viên',
+                role: (m.roleInGroup === 'Leader' || m.roleInGroup === 'Group Leader' || m.isLeader) ? 'leader' : 'member',
+                roleInGroup: m.roleInGroup || (m.role === 'leader' ? 'Leader' : 'Member'),
+              })),
+              majors: [] as ("SE" | "SS")[],
+              createdDate: g.createdAt || '',
+              topicName: g.topicName || null,
+              needs: [],
+              isLockedByRule: false,
+            };
+          });
+          
+          let filtered = mappedGroups;
+          if (onlyEmpty) {
+            filtered = filtered.filter(g => (g.memberCount || 0) === 0);
+          }
+          
+          setGroups(filtered);
+        } catch (apiError) {
+          console.error("Failed to fetch groups from GetGroupByCourseCode:", apiError);
+          // Fallback to GroupService.getGroups()
+          const data = await GroupService.getGroups();
+          let filtered = data.filter(g => (g.courseCode || "").toUpperCase() === selectedCourse.toUpperCase());
+          if (onlyEmpty) filtered = filtered.filter(g => (g.memberCount || 0) === 0);
+          setGroups(filtered);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch groups:", error);
+      setGroups([]);
     } finally {
       setIsLoading(false);
     }
@@ -92,9 +160,19 @@ export default function FindGroupsPage() {
     (async () => {
       const cu = getCurrentUser() as any
       if (!cu || cu.role !== 'student') return
-      if (cu.groupId) return
+      
+      // Nếu user đã có groupId trong state, redirect ngay đến trang chi tiết nhóm
+      if (cu.groupId) {
+        console.log("✅ [MyGroup] User already has groupId, redirecting to group detail:", cu.groupId);
+        setIsRedirecting(true);
+        router.push(`/student/groups/${cu.groupId}`)
+        return
+      }
+      
+      // Nếu chưa có groupId, thử fetch từ API
       let uid = getUserIdFromJWT() || String(cu.userId || '')
       const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uid)
+      
       if (!isGuid && cu.email) {
         try {
           let ok = false
@@ -109,43 +187,34 @@ export default function FindGroupsPage() {
           if (!ok) {
             try { const raw = await (await import('@/lib/api/generated/services/UserService')).UserService.getApiUserEmail({ email: cu.email }); uid = (raw as any)?.id || uid } catch {}
           }
-          if (!ok) {
-            // Fallback: tìm membership bằng từ khóa email/username
-            try {
-              const r2 = await fetch(`/api/proxy/api/GroupMember?Keyword=${encodeURIComponent(cu.email || cu.username || '')}&PageNumber=1&PageSize=10`, { cache: 'no-store', headers: { accept: 'text/plain' } })
-              if (r2.ok) {
-                const body = await r2.json()
-                const items = Array.isArray(body?.items) ? body.items : []
-                if (items.length > 0) {
-                  const gid = items[0]?.groupId
-                  if (gid) {
-                    const updated = { ...cu, groupId: gid }
-                    updateCurrentUser(updated)
-                    setUser(updated)
-                    router.push(`/student/groups/${gid}`)
-                    return
-                  }
-                }
-              }
-            } catch {}
-          }
         } catch {}
       }
+      
       const guidFinal = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uid)
-      if (!guidFinal) return
+      if (!guidFinal) {
+        console.log("⚠️ [MyGroup] Could not resolve valid userId, showing group list");
+        return
+      }
+      
       try {
         const list = await GeneratedGroupMemberService.getApiGroupMember({ userId: uid })
         const items = Array.isArray(list) ? list : []
         if (items.length > 0) {
           const gid = items[0]?.groupId
           if (gid) {
+            console.log("✅ [MyGroup] Found group from API, redirecting:", gid);
             const updated = { ...cu, groupId: gid }
             updateCurrentUser(updated)
             setUser(updated)
+            setIsRedirecting(true);
             router.push(`/student/groups/${gid}`)
+            return
           }
         }
-      } catch {}
+        console.log("ℹ️ [MyGroup] No group found from API, showing group list");
+      } catch (err) {
+        console.warn("⚠️ [MyGroup] Error checking group membership:", err);
+      }
     })()
   }, [])
 
@@ -262,6 +331,18 @@ export default function FindGroupsPage() {
     console.log("Apply to group:", groupId);
     alert("Đã nộp đơn (Mô phỏng).");
   };
+
+  // Nếu đang redirect đến trang nhóm, hiển thị loading
+  if (isRedirecting) {
+    return (
+      <DashboardLayout role="student">
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+          <p className="text-gray-600">Đang chuyển đến nhóm của bạn...</p>
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout role="student">
