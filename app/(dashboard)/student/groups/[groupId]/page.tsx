@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -26,6 +26,9 @@ export default function StudentGroupDetailPage() {
   const [topicOpen, setTopicOpen] = React.useState(false)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [leaveOpen, setLeaveOpen] = React.useState(false)
+  const [transferOpen, setTransferOpen] = React.useState(false)
+  const [newLeaderId, setNewLeaderId] = React.useState<string>("")
+  const [transferSubmitting, setTransferSubmitting] = React.useState(false)
   const [kickOpen, setKickOpen] = React.useState(false)
   const [kickMember, setKickMember] = React.useState<any>(null)
   const [topics, setTopics] = React.useState<any[]>([])
@@ -39,23 +42,39 @@ export default function StudentGroupDetailPage() {
 
   const isLeader = React.useMemo(() => {
     const uid = user?.userId || user?.id
+    
+    // Primary check: check if user has roleInGroup = 'leader' in members list
+    const isLeaderByRole = group?.members?.some((m: any) => {
+      const memberUserId = String(m.userId || '')
+      const currentUserId = String(uid || '')
+      const memberRole = String(m.roleInGroup || m.role || '').toLowerCase()
+      const isMatch = memberUserId === currentUserId && memberRole === 'leader'
+      
+      if (isMatch) {
+        console.log("👑 [isLeader] Found leader by roleInGroup:", {
+          memberUserId,
+          currentUserId,
+          memberRole,
+          roleInGroup: m.roleInGroup,
+          role: m.role
+        })
+      }
+      return isMatch
+    }) || false
+
+    // Fallback: check if user is group leader by leaderId
     const leaderId = group?.leaderId
-    const isLeaderCheck = Boolean(uid && leaderId && String(leaderId) === String(uid))
+    const isLeaderByLeaderId = Boolean(uid && leaderId && String(leaderId) === String(uid))
 
-    // Alternative check: check if user has roleInGroup = 'leader' in members list
-    const isLeaderByRole = group?.members?.some((m: any) =>
-      String(m.userId) === String(uid) && String(m.roleInGroup || m.role || '').toLowerCase() === 'leader'
-    ) || false
+    const finalIsLeader = isLeaderByRole || isLeaderByLeaderId
 
-    const finalIsLeader = isLeaderCheck || isLeaderByRole
-
-    console.log("👑 [isLeader] Check:", {
+    console.log("👑 [isLeader] Final check:", {
       uid,
-      leaderId,
-      isLeaderCheck,
       isLeaderByRole,
+      isLeaderByLeaderId,
       finalIsLeader,
-      groupLeaderId: group?.leaderId
+      groupLeaderId: group?.leaderId,
+      memberCount: group?.members?.length
     })
     return finalIsLeader
   }, [user, group])
@@ -212,6 +231,71 @@ export default function StudentGroupDetailPage() {
     } catch { setLeaveOpen(false) }
   }
 
+  async function handleTransferAndLeave() {
+    // Called when leader selects a new leader and wants to leave
+    if (!newLeaderId || !groupId) {
+      setTransferOpen(false)
+      return
+    }
+    setTransferSubmitting(true)
+    try {
+      const userIdToUse = getUserIdFromJWT() || user?.userId;
+      
+      if (!userIdToUse) {
+        throw new Error('Cannot identify current user');
+      }
+
+      // Step 1: Update the new member's role to Leader using PUT /api/GroupMember/UpdateRoleInGroup/{GroupId}?userId={UserId}
+      console.log("🔄 [handleTransferAndLeave] Step 1: Promoting new member to leader:", newLeaderId);
+      const updateRoleResponse = await fetch(`/api/proxy/GroupMember/UpdateRoleInGroup/${groupId}?userId=${newLeaderId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          roleInGroup: 'Leader',
+        }),
+      });
+
+      if (!updateRoleResponse.ok) {
+        const errorText = await updateRoleResponse.text().catch(() => 'Unknown error');
+        throw new Error(`Failed to promote new leader: ${updateRoleResponse.status} ${updateRoleResponse.statusText} ${errorText}`);
+      }
+      console.log("✅ [handleTransferAndLeave] Step 1 completed: New leader promoted successfully");
+
+      // Step 2: Remove current leader (yourself) from the group
+      console.log("🔄 [handleTransferAndLeave] Step 2: Removing current leader from group:", userIdToUse);
+      const deleteResponse = await fetch(`/api/proxy/GroupMember/${userIdToUse}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!deleteResponse.ok) {
+        const errorText = await deleteResponse.text().catch(() => 'Unknown error');
+        throw new Error(`Failed to remove current leader: ${deleteResponse.status} ${deleteResponse.statusText} ${errorText}`);
+      }
+      console.log("✅ [handleTransferAndLeave] Step 2 completed: Current leader removed");
+
+      // Update local user state
+      if (user) {
+        const updatedUser = { ...user, groupId: null };
+        updateCurrentUser(updatedUser);
+        window.dispatchEvent(new CustomEvent('userStateChanged'));
+      }
+
+      setTransferOpen(false)
+      router.push("/student/group")
+    } catch (err) {
+      console.error('❌ [handleTransferAndLeave] Error:', err)
+      alert(`Chuyển quyền trưởng nhóm thất bại: ${err instanceof Error ? err.message : 'Lỗi không xác định'}`)
+      setTransferOpen(false)
+    } finally {
+      setTransferSubmitting(false)
+    }
+  }
+
   async function toggleLock() {
     if (!isLeader) return
     try {
@@ -365,7 +449,15 @@ export default function StudentGroupDetailPage() {
                     <UserPlus className="w-4 h-4 mr-2" /> Mời thành viên
                   </Button>
                 ) : null}
-                <Button variant="destructive" onClick={() => setLeaveOpen(true)}>Rời nhóm</Button>
+                <Button variant="destructive" onClick={() => {
+                  // If current user is leader and there are other members, require transfer first
+                  const memberCount = group?.members ? group.members.length : (group?.memberCount || 0)
+                  if (isLeader && memberCount > 1) {
+                    setTransferOpen(true)
+                  } else {
+                    setLeaveOpen(true)
+                  }
+                }}>Rời nhóm</Button>
               </CardContent>
             </Card>
           </div>
@@ -424,6 +516,38 @@ export default function StudentGroupDetailPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Transfer leader dialog: required when current user is leader and group has other members */}
+        <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Chuyển nhượng Trưởng nhóm</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="text-sm">Bạn là Trưởng nhóm. Trước khi rời nhóm, vui lòng chuyển nhượng quyền Trưởng cho một thành viên khác.</div>
+              <div className="space-y-2 max-h-64 overflow-auto">
+                {(group?.members || []).filter((m: any) => String(m.userId) !== String(user?.userId)).map((m: any) => (
+                  <div key={m.userId} className="flex items-center justify-between p-2 rounded hover:bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      <img src={m.avatarUrl || '/placeholder-user.jpg'} className="w-8 h-8 rounded-full" alt="avatar" />
+                      <div>
+                        <div className="font-medium">{m.fullName || m.username || m.email}</div>
+                        <div className="text-xs text-gray-500">{m.major || ''}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <input type="radio" name="newLeader" value={m.userId} checked={newLeaderId === String(m.userId)} onChange={() => setNewLeaderId(String(m.userId))} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setTransferOpen(false)}>Huỷ</Button>
+              <Button disabled={!newLeaderId || transferSubmitting} onClick={handleTransferAndLeave}>{transferSubmitting ? 'Đang xử lý...' : 'Chuyển và Rời'}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={kickOpen} onOpenChange={setKickOpen}>
           <AlertDialogContent>
