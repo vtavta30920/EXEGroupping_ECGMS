@@ -116,7 +116,8 @@ export class GroupService {
   static async getGroups(courseId?: string): Promise<FeGroup[]> {
     try {
       const ts = Date.now();
-      const res = await fetch(`/api/proxy/Group/GetAllGroups?_t=${ts}`, {
+      // First request to get total count
+      const firstRes = await fetch(`/api/proxy/Group/GetAllGroups?pageNumber=1&pageSize=100&_t=${ts}`, {
         cache: 'no-store',
         next: { revalidate: 0 },
         headers: {
@@ -125,12 +126,41 @@ export class GroupService {
           'Expires': '0',
         },
       });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(`GetAllGroups failed: ${res.status} ${res.statusText} ${text}`);
+      if (!firstRes.ok) {
+        const text = await firstRes.text().catch(() => '');
+        throw new Error(`GetAllGroups failed: ${firstRes.status} ${firstRes.statusText} ${text}`);
       }
-      const groupsFromApi = await res.json();
-      let feGroups = (Array.isArray(groupsFromApi) ? groupsFromApi : []).map(mapApiGroupToFeGroup);
+      
+      const firstData = await firstRes.json();
+      const totalPages = firstData.totalPages || 1;
+      let allGroups = firstData.items || [];
+
+      // Fetch remaining pages if needed
+      if (totalPages > 1) {
+        const pagePromises = [];
+        for (let page = 2; page <= totalPages; page++) {
+          pagePromises.push(
+            fetch(`/api/proxy/Group/GetAllGroups?pageNumber=${page}&pageSize=100&_t=${ts}`, {
+              cache: 'no-store',
+              next: { revalidate: 0 },
+              headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+              },
+            }).then(res => res.json())
+          );
+        }
+
+        const remainingPages = await Promise.all(pagePromises);
+        remainingPages.forEach(pageData => {
+          if (pageData.items) {
+            allGroups = allGroups.concat(pageData.items);
+          }
+        });
+      }
+
+      let feGroups = (Array.isArray(allGroups) ? allGroups : []).map(mapApiGroupToFeGroup);
       if (courseId) {
         feGroups = feGroups.filter(g => g.courseId === courseId);
       }

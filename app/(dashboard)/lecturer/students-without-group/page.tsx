@@ -75,8 +75,10 @@ export default function StudentsWithoutGroupPage() {
     try {
       setLoading(true);
       const data = await LecturerService.getStudentsWithoutGroup();
-      setStudents(data);
-      setFilteredStudents(data);
+      // Ensure data is an array
+      const studentsArray = Array.isArray(data) ? data : [];
+      setStudents(studentsArray);
+      setFilteredStudents(studentsArray);
     } catch (error) {
       console.error("Error loading students:", error);
       const errorMessage =
@@ -88,6 +90,9 @@ export default function StudentsWithoutGroupPage() {
         description: errorMessage,
         variant: "destructive",
       });
+      // Set empty arrays on error
+      setStudents([]);
+      setFilteredStudents([]);
     } finally {
       setLoading(false);
     }
@@ -128,10 +133,11 @@ export default function StudentsWithoutGroupPage() {
   }, [searchTerm, filterMajor, filterSkill, students]);
 
   // Calculate pagination
-  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
+  const safeFilteredStudents = Array.isArray(filteredStudents) ? filteredStudents : [];
+  const totalPages = Math.ceil(safeFilteredStudents.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedStudents = filteredStudents.slice(startIndex, endIndex);
+  const paginatedStudents = safeFilteredStudents.slice(startIndex, endIndex);
 
   // Handle page change
   const handlePageChange = (page: number) => {
@@ -377,8 +383,8 @@ export default function StudentsWithoutGroupPage() {
                 <CardTitle>Danh sách sinh viên</CardTitle>
                 <CardDescription>
                   Hiển thị {startIndex + 1}-
-                  {Math.min(endIndex, filteredStudents.length)} trong tổng số{" "}
-                  {filteredStudents.length} sinh viên
+                  {Math.min(endIndex, safeFilteredStudents.length)} trong tổng số{" "}
+                  {safeFilteredStudents.length} sinh viên
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -404,7 +410,7 @@ export default function StudentsWithoutGroupPage() {
               <div className="text-center py-8">
                 <p className="text-gray-600">Đang tải dữ liệu...</p>
               </div>
-            ) : filteredStudents.length === 0 ? (
+            ) : safeFilteredStudents.length === 0 ? (
               <div className="text-center py-8">
                 <UserX className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">
@@ -488,7 +494,7 @@ export default function StudentsWithoutGroupPage() {
             )}
 
             {/* Pagination */}
-            {!loading && filteredStudents.length > 0 && totalPages > 1 && (
+            {!loading && safeFilteredStudents.length > 0 && totalPages > 1 && (
               <div className="mt-6 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
                   Trang {currentPage} / {totalPages}
