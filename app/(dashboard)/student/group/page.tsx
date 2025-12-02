@@ -302,8 +302,7 @@ export default function FindGroupsPage() {
               className: "bg-yellow-50 border-yellow-200 text-yellow-800"
             })
           } catch (leaderErr) {
-            console.error("Set leader failed", leaderErr)
-            toast({ title: "Cảnh báo", description: "Đã vào nhóm nhưng chưa set được Leader. Hãy liên hệ Admin." })
+            console.error("Set leader failed", leaderErr) 
           }
         } else {
           toast({ title: "Thành công", description: `Đã tham gia nhóm ${g.groupName}` })
