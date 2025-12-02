@@ -78,7 +78,7 @@ export default function StudentsWithoutGroupPage() {
     try {
       setLoading(true);
       const data = await LecturerService.getStudentsWithoutGroup();
-      // Ensure data is always an array
+      // Ensure data is an array
       const studentsArray = Array.isArray(data) ? data : [];
       setStudents(studentsArray);
       setFilteredStudents(studentsArray);
@@ -93,7 +93,7 @@ export default function StudentsWithoutGroupPage() {
         description: errorMessage,
         variant: "destructive",
       });
-      // Ensure filteredStudents is always an array even on error
+      // Set empty arrays on error
       setStudents([]);
       setFilteredStudents([]);
     } finally {
