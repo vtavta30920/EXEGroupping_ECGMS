@@ -47,6 +47,7 @@ import {
 export default function GradesPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [isChecking, setIsChecking] = useState(true);
   const [expandedCourses, setExpandedCourses] = useState<Set<string>>(
     new Set()
   );
@@ -59,9 +60,22 @@ export default function GradesPage() {
       return;
     }
     setUser(currentUser);
+    setIsChecking(false);
   }, [router]);
 
-  if (!user) return null;
+  // Hiển thị loading thay vì return null để không block navigation
+  if (isChecking || !user) {
+    return (
+      <DashboardLayout role="lecturer">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Đang tải...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // Filter data for the signed-in lecturer - memoized
   const lecturerCourses = useMemo(

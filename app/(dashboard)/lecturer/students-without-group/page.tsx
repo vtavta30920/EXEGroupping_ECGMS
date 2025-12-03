@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -36,18 +36,8 @@ export default function StudentsWithoutGroupPage() {
   const { toast } = useToast();
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser || currentUser.role !== "lecturer") {
-      router.push("/login");
-      return;
-    }
-    setUser(currentUser);
-    loadStudents();
-  }, [router]);
-
   // load students without group
-  const loadStudents = async () => {
+  const loadStudents = useCallback(async () => {
     try {
       setLoading(true);
       const data = await LecturerService.getStudentsWithoutGroup();
@@ -70,7 +60,17 @@ export default function StudentsWithoutGroupPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || currentUser.role !== "lecturer") {
+      router.push("/login");
+      return;
+    }
+    setUser(currentUser);
+    loadStudents();
+  }, [router, loadStudents]);
 
   // Memoized filtered students - more efficient than useEffect
   const filteredStudents = useMemo(() => {
@@ -191,7 +191,19 @@ export default function StudentsWithoutGroupPage() {
     }
   };
 
-  if (!user) return null;
+  // Show loading state instead of blocking with return null
+  if (!user) {
+    return (
+      <DashboardLayout role="lecturer">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Đang tải...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="lecturer">
