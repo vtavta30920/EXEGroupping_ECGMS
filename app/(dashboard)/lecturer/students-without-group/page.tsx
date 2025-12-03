@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -27,9 +27,6 @@ export default function StudentsWithoutGroupPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [students, setStudents] = useState<StudentWithoutGroup[]>([]);
-  const [filteredStudents, setFilteredStudents] = useState<
-    StudentWithoutGroup[]
-  >([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterMajor, setFilterMajor] = useState<string>("all");
@@ -57,7 +54,6 @@ export default function StudentsWithoutGroupPage() {
       // Ensure data is an array
       const studentsArray = Array.isArray(data) ? data : [];
       setStudents(studentsArray);
-      setFilteredStudents(studentsArray);
     } catch (error) {
       console.error("Error loading students:", error);
       const errorMessage =
@@ -71,17 +67,16 @@ export default function StudentsWithoutGroupPage() {
       });
       // Set empty arrays on error
       setStudents([]);
-      setFilteredStudents([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
+  // Memoized filtered students - more efficient than useEffect
+  const filteredStudents = useMemo(() => {
     // Ensure students is always an array
     if (!Array.isArray(students)) {
-      setFilteredStudents([]);
-      return;
+      return [];
     }
 
     let filtered = [...students];
@@ -112,10 +107,13 @@ export default function StudentsWithoutGroupPage() {
       );
     }
 
-    setFilteredStudents(filtered);
-    // Reset to first page when filters change
-    setCurrentPage(1);
+    return filtered;
   }, [debouncedSearchTerm, filterMajor, filterSkill, students]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, filterMajor, filterSkill]);
 
   // Calculate pagination - ensure filteredStudents is always an array
   const safeFilteredStudents = Array.isArray(filteredStudents)

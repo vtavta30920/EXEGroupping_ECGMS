@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,9 @@ import {
 export default function GradesPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
+  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(
+    new Set()
+  );
   const { toast } = useToast();
 
   useEffect(() => {
@@ -61,73 +63,96 @@ export default function GradesPage() {
 
   if (!user) return null;
 
-  // Filter data for the signed-in lecturer
-  const lecturerCourses = mockCourses.filter(
-    (c) => c.lecturerId === user.userId
-  );
-  const lecturerCourseIds = new Set(lecturerCourses.map((c) => c.courseId));
-  const lecturerGroups = mockGroups.filter((g) =>
-    lecturerCourseIds.has(g.courseId)
-  );
-  const lecturerCheckpoints = mockCheckpoints.filter((cp) =>
-    lecturerCourseIds.has(cp.courseId)
+  // Filter data for the signed-in lecturer - memoized
+  const lecturerCourses = useMemo(
+    () => mockCourses.filter((c) => c.lecturerId === user.userId),
+    [user.userId]
   );
 
-  // Get tasks for lecturer's groups
-  const lecturerGroupIds = new Set(lecturerGroups.map((g) => g.groupId));
-  const lecturerTasks = mockTasks.filter((t) =>
-    lecturerGroupIds.has(t.groupId)
+  const lecturerCourseIds = useMemo(
+    () => new Set(lecturerCourses.map((c) => c.courseId)),
+    [lecturerCourses]
   );
 
-  const toggleCourse = (courseId: string) => {
-    const newExpanded = new Set(expandedCourses);
-    if (newExpanded.has(courseId)) {
-      newExpanded.delete(courseId);
-    } else {
-      newExpanded.add(courseId);
-    }
-    setExpandedCourses(newExpanded);
-  };
+  const lecturerGroups = useMemo(
+    () => mockGroups.filter((g) => lecturerCourseIds.has(g.courseId)),
+    [lecturerCourseIds]
+  );
 
-  // Calculate checkpoint grades for each group
-  const calculateCheckpointGrades = (
-    groupId: string,
-    courseId: string
-  ): CheckpointGrade[] => {
-    const checkpoints = lecturerCheckpoints.filter(
-      (cp) => cp.courseId === courseId
-    );
-    const groupTasks = lecturerTasks.filter((t) => t.groupId === groupId);
+  const lecturerCheckpoints = useMemo(
+    () => mockCheckpoints.filter((cp) => lecturerCourseIds.has(cp.courseId)),
+    [lecturerCourseIds]
+  );
 
-    return checkpoints.map((checkpoint) => {
-      const checkpointTasks = groupTasks.filter(
-        (t) => t.checkpointId === checkpoint.checkpointId && t.status === "graded"
-      );
-      const taskGrades = checkpointTasks
-        .map((t) => t.grade || 0)
-        .filter((grade) => grade > 0);
-      const averageGrade =
-        taskGrades.length > 0
-          ? taskGrades.reduce((sum, grade) => sum + grade, 0) / taskGrades.length
-          : 0;
-      const weightedScore = (averageGrade * checkpoint.weight) / 100;
+  // Get tasks for lecturer's groups - memoized
+  const lecturerGroupIds = useMemo(
+    () => new Set(lecturerGroups.map((g) => g.groupId)),
+    [lecturerGroups]
+  );
 
-      return {
-        checkpointId: checkpoint.checkpointId,
-        checkpointNumber: checkpoint.checkpointNumber,
-        checkpointName: checkpoint.checkpointName,
-        groupId,
-        groupName: "",
-        taskGrades,
-        averageGrade: Math.round(averageGrade * 100) / 100,
-        weight: checkpoint.weight,
-        weightedScore: Math.round(weightedScore * 100) / 100,
-      };
+  const lecturerTasks = useMemo(
+    () => mockTasks.filter((t) => lecturerGroupIds.has(t.groupId)),
+    [lecturerGroupIds]
+  );
+
+  const toggleCourse = useCallback((courseId: string) => {
+    setExpandedCourses((prev) => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(courseId)) {
+        newExpanded.delete(courseId);
+      } else {
+        newExpanded.add(courseId);
+      }
+      return newExpanded;
     });
-  };
+  }, []);
 
-  // Calculate final course grades
-  const calculateCourseFinalGrades = (): CourseFinalGrade[] => {
+  // Calculate checkpoint grades for each group - memoized
+  const calculateCheckpointGrades = useCallback(
+    (
+      groupId: string,
+      courseId: string,
+      checkpoints: Checkpoint[],
+      tasks: Task[]
+    ): CheckpointGrade[] => {
+      const courseCheckpoints = checkpoints.filter(
+        (cp) => cp.courseId === courseId
+      );
+      const groupTasks = tasks.filter((t) => t.groupId === groupId);
+
+      return courseCheckpoints.map((checkpoint) => {
+        const checkpointTasks = groupTasks.filter(
+          (t) =>
+            t.checkpointId === checkpoint.checkpointId && t.status === "graded"
+        );
+        const taskGrades = checkpointTasks
+          .map((t) => t.grade || 0)
+          .filter((grade) => grade > 0);
+        const averageGrade =
+          taskGrades.length > 0
+            ? taskGrades.reduce((sum, grade) => sum + grade, 0) /
+              taskGrades.length
+            : 0;
+        const weightedScore = (averageGrade * checkpoint.weight) / 100;
+
+        return {
+          checkpointId: checkpoint.checkpointId,
+          checkpointNumber: checkpoint.checkpointNumber,
+          checkpointName: checkpoint.checkpointName,
+          groupId,
+          groupName: "",
+          taskGrades,
+          averageGrade: Math.round(averageGrade * 100) / 100,
+          weight: checkpoint.weight,
+          weightedScore: Math.round(weightedScore * 100) / 100,
+        };
+      });
+    },
+    []
+  );
+
+  // Calculate final course grades - memoized
+  const courseFinalGrades = useMemo(() => {
     const result: CourseFinalGrade[] = [];
 
     lecturerCourses.forEach((course) => {
@@ -138,7 +163,9 @@ export default function GradesPage() {
       courseGroups.forEach((group) => {
         const checkpointGrades = calculateCheckpointGrades(
           group.groupId,
-          course.courseId
+          course.courseId,
+          lecturerCheckpoints,
+          lecturerTasks
         );
         const finalGrade = checkpointGrades.reduce(
           (sum, cg) => sum + cg.weightedScore,
@@ -161,23 +188,31 @@ export default function GradesPage() {
     });
 
     return result;
-  };
+  }, [
+    lecturerCourses,
+    lecturerGroups,
+    lecturerCheckpoints,
+    lecturerTasks,
+    calculateCheckpointGrades,
+  ]);
 
-  const courseFinalGrades = calculateCourseFinalGrades();
-
-  // Group final grades by course
-  const gradesByCourse = lecturerCourses.reduce((acc, course) => {
-    const grades = courseFinalGrades.filter(
-      (g) => g.courseId === course.courseId
-    );
-    if (grades.length > 0) {
-      acc[course.courseId] = {
-        course,
-        grades,
-      };
-    }
-    return acc;
-  }, {} as Record<string, { course: Course; grades: CourseFinalGrade[] }>);
+  // Group final grades by course - memoized
+  const gradesByCourse = useMemo(
+    () =>
+      lecturerCourses.reduce((acc, course) => {
+        const grades = courseFinalGrades.filter(
+          (g) => g.courseId === course.courseId
+        );
+        if (grades.length > 0) {
+          acc[course.courseId] = {
+            course,
+            grades,
+          };
+        }
+        return acc;
+      }, {} as Record<string, { course: Course; grades: CourseFinalGrade[] }>),
+    [lecturerCourses, courseFinalGrades]
+  );
 
   const getGradeColor = (grade: number) => {
     if (grade >= 80) return "text-green-600";
@@ -193,18 +228,24 @@ export default function GradesPage() {
     return "bg-red-100 text-red-700";
   };
 
-  // Calculate statistics
-  const totalGroups = lecturerGroups.length;
-  const totalTasks = lecturerTasks.length;
-  const gradedTasks = lecturerTasks.filter((t) => t.status === "graded").length;
-  const averageFinalGrade =
-    courseFinalGrades.length > 0
-      ? Math.round(
-          (courseFinalGrades.reduce((sum, g) => sum + g.finalGrade, 0) /
-            courseFinalGrades.length) *
-            100
-        ) / 100
-      : 0;
+  // Calculate statistics - memoized
+  const totalGroups = useMemo(() => lecturerGroups.length, [lecturerGroups]);
+  const totalTasks = useMemo(() => lecturerTasks.length, [lecturerTasks]);
+  const gradedTasks = useMemo(
+    () => lecturerTasks.filter((t) => t.status === "graded").length,
+    [lecturerTasks]
+  );
+  const averageFinalGrade = useMemo(
+    () =>
+      courseFinalGrades.length > 0
+        ? Math.round(
+            (courseFinalGrades.reduce((sum, g) => sum + g.finalGrade, 0) /
+              courseFinalGrades.length) *
+              100
+          ) / 100
+        : 0,
+    [courseFinalGrades]
+  );
 
   return (
     <DashboardLayout role="lecturer">
@@ -330,9 +371,7 @@ export default function GradesPage() {
                           <CardTitle className="text-xl">
                             {course.courseCode} - {course.courseName}
                           </CardTitle>
-                          <Badge variant="outline">
-                            {grades.length} nhóm
-                          </Badge>
+                          <Badge variant="outline">{grades.length} nhóm</Badge>
                         </div>
                         <CardDescription className="mt-2 ml-8">
                           {course.semester} {course.year}
@@ -364,7 +403,9 @@ export default function GradesPage() {
                                   {grade.groupName}
                                 </CardTitle>
                                 <Badge
-                                  className={getGradeBadgeColor(grade.finalGrade)}
+                                  className={getGradeBadgeColor(
+                                    grade.finalGrade
+                                  )}
                                 >
                                   Điểm cuối: {grade.finalGrade.toFixed(1)}/100
                                 </Badge>
@@ -395,7 +436,8 @@ export default function GradesPage() {
                                     {grade.checkpointGrades
                                       .sort(
                                         (a, b) =>
-                                          a.checkpointNumber - b.checkpointNumber
+                                          a.checkpointNumber -
+                                          b.checkpointNumber
                                       )
                                       .map((cg) => (
                                         <TableRow key={cg.checkpointId}>
@@ -457,7 +499,10 @@ export default function GradesPage() {
                                         a.checkpointNumber - b.checkpointNumber
                                     )
                                     .map((cg) => (
-                                      <div key={cg.checkpointId} className="space-y-1">
+                                      <div
+                                        key={cg.checkpointId}
+                                        className="space-y-1"
+                                      >
                                         <div className="flex justify-between text-sm">
                                           <span className="text-gray-600">
                                             {cg.checkpointName}
@@ -468,7 +513,9 @@ export default function GradesPage() {
                                             )}`}
                                           >
                                             {cg.averageGrade > 0
-                                              ? `${cg.averageGrade.toFixed(1)}/100`
+                                              ? `${cg.averageGrade.toFixed(
+                                                  1
+                                                )}/100`
                                               : "Chưa chấm"}
                                           </span>
                                         </div>
@@ -507,9 +554,7 @@ export default function GradesPage() {
                     • Điểm Checkpoint = Trung bình cộng của tất cả điểm Task
                     trong Checkpoint đó
                   </li>
-                  <li>
-                    • Mỗi Checkpoint chiếm 25% tổng điểm môn học
-                  </li>
+                  <li>• Mỗi Checkpoint chiếm 25% tổng điểm môn học</li>
                   <li>
                     • Điểm môn học cuối cùng = Tổng của 4 điểm Checkpoint (mỗi
                     checkpoint đã được quy đổi theo trọng số)
