@@ -11,14 +11,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Plus, BookOpen } from "lucide-react";
+import { BookOpen, Loader2 } from "lucide-react";
 import { getCurrentUser } from "@/lib/utils/auth";
-import { mockCourses } from "@/lib/mock-data/courses";
+import { CourseService } from "@/lib/api/courseService";
 import { useToast } from "@/lib/hooks/use-toast";
+import type { Course } from "@/lib/types/course";
 
 export default function CoursesPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [lecturerCourses, setLecturerCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -28,13 +31,27 @@ export default function CoursesPage() {
       return;
     }
     setUser(currentUser);
+    loadCourses(currentUser.userId);
   }, [router]);
 
-  if (!user) return null;
+  const loadCourses = async (lecturerId: string) => {
+    try {
+      setLoading(true);
+      const courses = await CourseService.getCoursesByLecturer(lecturerId);
+      setLecturerCourses(courses);
+    } catch (error) {
+      console.error("Error loading courses:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách khóa học",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const lecturerCourses = mockCourses.filter(
-    (c) => c.lecturerId === user.userId
-  );
+  if (!user) return null;
 
   return (
     <DashboardLayout role="lecturer">
@@ -46,22 +63,22 @@ export default function CoursesPage() {
               Quản lý các khóa học bạn phụ trách
             </p>
           </div>
-          {/* <Button
-            className="bg-orange-500 hover:bg-orange-600"
-            onClick={() =>
-              toast({
-                title: "Tạo khóa học",
-                description: "Hành động mô phỏng",
-              })
-            }
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Tạo khóa học
-          </Button> */}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {lecturerCourses.map((course) => (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+            <span className="ml-2 text-gray-600">Đang tải danh sách khóa học...</span>
+          </div>
+        ) : lecturerCourses.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center text-gray-600">
+              Bạn chưa phụ trách khóa học nào.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {lecturerCourses.map((course) => (
             <Card
               key={course.courseId}
               className="hover:shadow-lg transition-shadow cursor-pointer"
@@ -93,7 +110,8 @@ export default function CoursesPage() {
               </CardContent>
             </Card>
           ))}
-        </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
