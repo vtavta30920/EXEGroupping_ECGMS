@@ -1,10 +1,22 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { BarChart3 } from "lucide-react"
-import { BarChart, Bar, CartesianGrid, XAxis, YAxis } from "recharts"
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import type { DashboardData } from "@/lib/types/dashboard"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { BarChart3 } from "lucide-react";
+import { BarChart, Bar, CartesianGrid, XAxis, YAxis } from "recharts";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import type { DashboardData } from "@/lib/types/dashboard";
 
 // export function CourseProgressChart({ data }: { data: DashboardData }) {
 //   const chartData = data.courseProgress.map((c) => ({
@@ -13,13 +25,13 @@ import type { DashboardData } from "@/lib/types/dashboard"
 //     "Chưa có nhóm": c.unassigned,
 //   }))
 export function CourseProgressChart({ data }: { data: DashboardData }) {
-  const courseProgress = data?.courseProgress ?? []
+  const courseProgress = data?.groupProgress ?? [];
 
   const chartData = courseProgress.map((c) => ({
-    course: c.courseName,
-    "Đã có nhóm": c.assigned,
-    "Chưa có nhóm": c.unassigned,
-  }))
+    course: c.courseCode,
+    "Đã có nhóm": c.hasGroup,
+    "Chưa có nhóm": c.noGroup,
+  }));
 
   return (
     <Card className="lg:col-span-2">
@@ -28,13 +40,18 @@ export function CourseProgressChart({ data }: { data: DashboardData }) {
           <BarChart3 className="w-5 h-5" />
           Tiến độ ghép nhóm theo môn học
         </CardTitle>
-        <CardDescription>Phân bổ số sinh viên đã có nhóm và chưa có nhóm</CardDescription>
+        <CardDescription>
+          Phân bổ số sinh viên đã có nhóm và chưa có nhóm
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer
           config={{
             "Đã có nhóm": { label: "Đã có nhóm", color: "hsl(var(--chart-1))" },
-            "Chưa có nhóm": { label: "Chưa có nhóm", color: "hsl(var(--chart-2))" },
+            "Chưa có nhóm": {
+              label: "Chưa có nhóm",
+              color: "hsl(var(--chart-2))",
+            },
           }}
           className="w-full h-[320px]"
         >
@@ -50,5 +67,5 @@ export function CourseProgressChart({ data }: { data: DashboardData }) {
         </ChartContainer>
       </CardContent>
     </Card>
-  )
+  );
 }

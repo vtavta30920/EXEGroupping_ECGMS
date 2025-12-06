@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import type { DashboardData } from "@/lib/types/dashboard"
-import { DashboardHeader } from "./DashboardHeader"
-import { OverviewCards } from "./OverviewCards"
-import { CourseProgressChart } from "./CourseProgressChart"
-import { AttentionSection } from "./AttentionSection"
+import type { DashboardData } from "@/lib/types/dashboard";
+import { DashboardHeader } from "./DashboardHeader";
+import { OverviewCards } from "./OverviewCards";
+import { CourseProgressChart } from "./CourseProgressChart";
+import { AttentionSection } from "./AttentionSection";
 import { ActionsSection } from "./ActionsSection";
 
 export function DashboardUI({ data }: { data: DashboardData }) {
@@ -16,5 +16,5 @@ export function DashboardUI({ data }: { data: DashboardData }) {
       <AttentionSection data={data} />
       <ActionsSection />
     </div>
-  )
+  );
 }
