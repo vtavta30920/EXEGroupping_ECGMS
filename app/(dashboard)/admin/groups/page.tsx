@@ -297,72 +297,98 @@ export default function AdminGroupsPage() {
   }, [courseLecturerName, courses])
 
   // Load groups for a course
-  const loadGroups = React.useCallback(async (courseCode: string) => {
-    if (!courseCode) return
-    try {
-      let rows: any[] = []
-      if (useMock) {
-        const list = mockGroups.filter(g => g.courseCode === courseCode)
-        rows = list.map(g => {
-          const members = Array.isArray(g.members) ? g.members : []
-          const memberCount = g.memberCount ?? members.length
-          // Lấy maxMembers từ course hiện tại thay vì từ group
-          const currentCourse = courses.find(c => c.courseCode === courseCode);
-          const maxMembers = currentCourse?.maxMembers || g.maxMembers || 5
-          const leader = members.find((m: any) => {
-            const role = (m.role || '').toLowerCase()
-            return role === 'leader' || m.isLeader === true || m.role === 'Leader'
-          })
-          const hasLeader = !!leader
-          const summary = `${hasLeader ? '1 Leader' : '0 Leader'} • ${hasLeader ? Math.max(memberCount - 1, 0) : memberCount} Members`
-          const isValid = hasLeader && memberCount === maxMembers
-          return {
-            id: g.groupId,
-            name: g.groupName,
-            courseCode: g.courseCode,
-            memberCount,
-            maxMembers,
-            lecturerName: courseLecturerName || '—',
-            status: g.status || (memberCount >= maxMembers ? 'finalize' : (memberCount === 0 ? 'open' : 'open')),
-            members,
-            hasLeader,
-            summary,
-            isValid,
-          }
-        })
-      } else {
-        try {
-          const res = await fetch(`/api/proxy/Group/GetGroupByCourseCode/${encodeURIComponent(courseCode)}`, {
-            cache: 'no-store',
+const loadGroups = React.useCallback(async (courseCode: string) => {
+  if (!courseCode) return;
+
+  try {
+    let rows: any[] = [];
+
+    if (useMock) {
+      const list = mockGroups.filter(g => g.courseCode === courseCode);
+      rows = list.map(g => {
+        const members = Array.isArray(g.members) ? g.members : [];
+        const memberCount = g.memberCount ?? members.length;
+
+        const currentCourse = courses.find(c => c.courseCode === courseCode);
+        const maxMembers = currentCourse?.maxMembers || g.maxMembers || 5;
+
+        const leader = members.find((m: any) => {
+          const role = (m.role || "").toLowerCase();
+          return role === "leader" || m.isLeader === true;
+        });
+
+        const hasLeader = !!leader;
+        const summary = `${hasLeader ? "1 Leader" : "0 Leader"} • ${
+          hasLeader ? Math.max(memberCount - 1, 0) : memberCount
+        } Members`;
+        const isValid = hasLeader && memberCount === maxMembers;
+
+        return {
+          id: g.groupId,
+          name: g.groupName,
+          courseCode: g.courseCode,
+          memberCount,
+          maxMembers,
+          lecturerName: courseLecturerName || "—",
+          status:
+            g.status ||
+            (memberCount >= maxMembers
+              ? "finalize"
+              : memberCount === 0
+              ? "open"
+              : "open"),
+          members,
+          hasLeader,
+          summary,
+          isValid,
+        };
+      });
+    } else {
+      try {
+        const res = await fetch(
+          `/api/proxy/Group/GetGroupByCourseCode/${encodeURIComponent(
+            courseCode
+          )}`,
+          {
+            cache: "no-store",
             next: { revalidate: 0 },
             headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0',
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+              Expires: "0",
             },
-          })
-          if (!res.ok) {
-            const text = await res.text().catch(() => '')
-            throw new Error(`GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`)
           }
-          const groupsRaw = await res.json()
-          rows = groupsRaw.map(mapApiGroupToRow)
-        } catch (err) {
-          const all = await GeneratedGroupService.getApiGroup()
-          const list = Array.isArray(all) ? all.filter((g: any) => (g?.course?.courseCode || g?.courseCode) === courseCode) : []
-          rows = list.map(mapApiGroupToRow)
+        );
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new Error(
+            `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`
+          );
         }
-        setGroups(rows);
+
+        const groupsRaw = await res.json();
+        rows = groupsRaw.map(mapApiGroupToRow);
       } catch (err) {
-        console.error(err);
-        toast({ title: "Lỗi", description: "Không thể tải danh sách nhóm." });
+        const all = await GeneratedGroupService.getApiGroup();
+        const list = Array.isArray(all)
+          ? all.filter(
+              (g: any) =>
+                (g?.course?.courseCode || g?.courseCode) === courseCode
+            )
+          : [];
+
+        rows = list.map(mapApiGroupToRow);
       }
-      setGroups(rows)
-    } catch (err) {
-      console.error(err)
-      toast({ title: "Lỗi", description: "Không thể tải danh sách nhóm." })
     }
-  }, [mapApiGroupToRow, toast, useMock, courses, courseLecturerName, selectedCourseCode])
+
+    setGroups(rows);
+  } catch (err) {
+    console.error(err);
+    toast({ title: "Lỗi", description: "Không thể tải danh sách nhóm." });
+  }
+}, [mapApiGroupToRow, toast, useMock, courses, courseLecturerName]);
+
 
   React.useEffect(() => {
     (async () => {
