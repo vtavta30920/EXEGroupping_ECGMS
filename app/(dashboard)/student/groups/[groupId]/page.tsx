@@ -730,34 +730,54 @@ export default function StudentGroupDetailPage() {
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {isLeader && (
-                  <Button
-                    variant={group?.isReady ? "default" : "outline"}
-                    onClick={toggleReady}
-                    disabled={updatingReady}
-                    className={`w-full ${
-                      group?.isReady
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                        : "border-orange-300 text-orange-700 hover:bg-orange-50"
-                    }`}
-                  >
-                    {group?.isReady ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        {updatingReady
-                          ? "Đang cập nhật..."
-                          : "Nhóm đã sẵn sàng"}
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-4 h-4 mr-2" />
-                        {updatingReady
-                          ? "Đang cập nhật..."
-                          : "Đánh dấu sẵn sàng"}
-                      </>
-                    )}
-                  </Button>
-                )}
+                {isLeader &&
+                  (() => {
+                    // Kiểm tra xem nhóm đã có status (approved/rejected) chưa
+                    const status = (group?.status || "").toLowerCase();
+                    const hasStatus =
+                      status === "approved" ||
+                      status === "approve" ||
+                      status === "rejected" ||
+                      status === "reject";
+
+                    // Nếu đã có status, disable nút
+                    const isDisabled = hasStatus || updatingReady;
+
+                    return (
+                      <Button
+                        variant={group?.isReady ? "default" : "outline"}
+                        onClick={toggleReady}
+                        disabled={isDisabled}
+                        className={`w-full ${
+                          group?.isReady
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                            : "border-orange-300 text-orange-700 hover:bg-orange-50"
+                        } ${
+                          isDisabled && !updatingReady
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
+                      >
+                        {group?.isReady ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 mr-2" />
+                            {updatingReady
+                              ? "Đang cập nhật..."
+                              : hasStatus
+                              ? "Nhóm đã sẵn sàng"
+                              : "Chuyển về chưa sẵn sàng"}
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-4 h-4 mr-2" />
+                            {updatingReady
+                              ? "Đang cập nhật..."
+                              : "Đánh dấu sẵn sàng"}
+                          </>
+                        )}
+                      </Button>
+                    );
+                  })()}
                 {isLeader &&
                 (group?.memberCount || 0) < (group?.maxMembers || 0) ? (
                   <Button
