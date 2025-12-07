@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -27,9 +27,6 @@ export default function StudentsWithoutGroupPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [students, setStudents] = useState<StudentWithoutGroup[]>([]);
-  const [filteredStudents, setFilteredStudents] = useState<
-    StudentWithoutGroup[]
-  >([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterMajor, setFilterMajor] = useState<string>("all");
@@ -39,25 +36,14 @@ export default function StudentsWithoutGroupPage() {
   const { toast } = useToast();
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser || currentUser.role !== "lecturer") {
-      router.push("/login");
-      return;
-    }
-    setUser(currentUser);
-    loadStudents();
-  }, [router]);
-
   // load students without group
-  const loadStudents = async () => {
+  const loadStudents = useCallback(async () => {
     try {
       setLoading(true);
       const data = await LecturerService.getStudentsWithoutGroup();
       // Ensure data is an array
       const studentsArray = Array.isArray(data) ? data : [];
       setStudents(studentsArray);
-      setFilteredStudents(studentsArray);
     } catch (error) {
       console.error("Error loading students:", error);
       const errorMessage =
@@ -71,17 +57,26 @@ export default function StudentsWithoutGroupPage() {
       });
       // Set empty arrays on error
       setStudents([]);
-      setFilteredStudents([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || currentUser.role !== "lecturer") {
+      router.push("/login");
+      return;
+    }
+    setUser(currentUser);
+    loadStudents();
+  }, [router, loadStudents]);
+
+  // Memoized filtered students - more efficient than useEffect
+  const filteredStudents = useMemo(() => {
     // Ensure students is always an array
     if (!Array.isArray(students)) {
-      setFilteredStudents([]);
-      return;
+      return [];
     }
 
     let filtered = [...students];
@@ -112,10 +107,13 @@ export default function StudentsWithoutGroupPage() {
       );
     }
 
-    setFilteredStudents(filtered);
-    // Reset to first page when filters change
-    setCurrentPage(1);
+    return filtered;
   }, [debouncedSearchTerm, filterMajor, filterSkill, students]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, filterMajor, filterSkill]);
 
   // Calculate pagination - ensure filteredStudents is always an array
   const safeFilteredStudents = Array.isArray(filteredStudents)
@@ -193,7 +191,19 @@ export default function StudentsWithoutGroupPage() {
     }
   };
 
-  if (!user) return null;
+  // Show loading state instead of blocking with return null
+  if (!user) {
+    return (
+      <DashboardLayout role="lecturer">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Đang tải...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="lecturer">

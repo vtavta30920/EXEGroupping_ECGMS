@@ -12,18 +12,20 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Users, Calendar, BookOpen } from "lucide-react";
+import { ArrowLeft, Users, BookOpen, Loader2 } from "lucide-react";
 import { getCurrentUser } from "@/lib/utils/auth";
-import { mockCourses } from "@/lib/mock-data/courses";
-import { mockGroups } from "@/lib/mock-data/groups";
+import { CourseService } from "@/lib/api/courseService";
+import { GroupService, type ApiGroup } from "@/lib/api/groupService";
 import { useToast } from "@/lib/hooks/use-toast";
+import type { Course } from "@/lib/types/course";
 
 export default function CourseDetailPage() {
   const router = useRouter();
   const params = useParams();
   const [user, setUser] = useState<any>(null);
-  const [course, setCourse] = useState<any>(null);
-  const [courseGroups, setCourseGroups] = useState<any[]>([]);
+  const [course, setCourse] = useState<Course | null>(null);
+  const [courseGroups, setCourseGroups] = useState<ApiGroup[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -33,61 +35,74 @@ export default function CourseDetailPage() {
       return;
     }
     setUser(currentUser);
+    loadCourseData(currentUser.userId);
+  }, [router, params.courseId]);
 
-    // Find course
-    const courseId = params.courseId as string;
-    const foundCourse = mockCourses.find((c) => c.courseId === courseId);
+  const loadCourseData = async (lecturerId: string) => {
+    try {
+      setLoading(true);
+      const courseId = params.courseId as string;
 
-    if (!foundCourse) {
-      toast({ title: "Error", description: "Course not found" });
-      router.push("/lecturer/courses");
-      return;
-    }
+      // Load course
+      const foundCourse = await CourseService.getCourseById(courseId);
+      if (!foundCourse) {
+        toast({
+          title: "Lỗi",
+          description: "Không tìm thấy khóa học",
+          variant: "destructive",
+        });
+        router.push("/lecturer/courses");
+        return;
+      }
 
-    // Check if lecturer teaches this course
-    if (foundCourse.lecturerId !== currentUser.userId) {
+      // Verify lecturer teaches this course
+      const lecturerCourses = await CourseService.getCoursesByLecturer(
+        lecturerId
+      );
+      const hasAccess = lecturerCourses.some((c) => c.courseId === courseId);
+
+      if (!hasAccess) {
+        toast({
+          title: "Truy cập bị từ chối",
+          description: "Bạn không phụ trách khóa học này",
+          variant: "destructive",
+        });
+        router.push("/lecturer/courses");
+        return;
+      }
+
+      setCourse(foundCourse);
+
+      // Load groups for this course
+      const allGroups = await GroupService.getGroups();
+      const groups = allGroups.filter((g) => g.courseId === courseId);
+      setCourseGroups(groups);
+    } catch (error) {
+      console.error("Error loading course data:", error);
       toast({
-        title: "Access Denied",
-        description: "You don't teach this course",
+        title: "Lỗi",
+        description: "Không thể tải dữ liệu khóa học",
+        variant: "destructive",
       });
-      router.push("/lecturer/courses");
-      return;
-    }
-
-    setCourse(foundCourse);
-
-    // Find groups for this course
-    const groups = mockGroups.filter((g) => g.courseId === courseId);
-    setCourseGroups(groups);
-  }, [router, params.courseId, toast]);
-
-  if (!user || !course) return null;
-
-  const getApprovalStatusColor = (status: string) => {
-    switch (status) {
-      case "approved":
-        return "bg-green-100 text-green-700";
-      case "rejected":
-        return "bg-red-100 text-red-700";
-      case "pending":
-        return "bg-yellow-100 text-yellow-700";
-      default:
-        return "bg-gray-100 text-gray-700";
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getApprovalStatusText = (status: string) => {
-    switch (status) {
-      case "approved":
-        return "Đã duyệt";
-      case "rejected":
-        return "Từ chối";
-      case "pending":
-        return "Chờ duyệt";
-      default:
-        return "Không xác định";
-    }
-  };
+  if (!user) return null;
+
+  if (loading) {
+    return (
+      <DashboardLayout role="lecturer">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+          <span className="ml-2 text-gray-600">Đang tải dữ liệu...</span>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!course) return null;
 
   return (
     <DashboardLayout role="lecturer">
@@ -169,55 +184,74 @@ export default function CourseDetailPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <h3 className="font-semibold text-lg">
-                              {group.groupName}
+                              {group.name}
                             </h3>
-                            <Badge
-                              className={getApprovalStatusColor(
-                                group.approvalStatus
-                              )}
-                            >
-                              {getApprovalStatusText(group.approvalStatus)}
-                            </Badge>
+                            {group.status && (
+                              <Badge
+                                variant={
+                                  group.status === "active"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
+                                {group.status}
+                              </Badge>
+                            )}
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                             <div>
                               <p className="text-gray-600">Thành viên</p>
                               <p className="font-semibold">
-                                {group.memberCount}/{group.maxMembers}
+                                {group.members?.length || 0}/
+                                {group.maxMembers || "N/A"}
                               </p>
                             </div>
                             <div>
                               <p className="text-gray-600">Trưởng nhóm</p>
                               <p className="font-semibold">
-                                {group.leaderName}
+                                {group.members?.[0]?.userProfileViewModel
+                                  ?.fullName || "N/A"}
                               </p>
                             </div>
                             <div>
                               <p className="text-gray-600">Chuyên ngành</p>
-                              <div className="flex gap-1">
-                                {group.majors.map((major: string) => (
-                                  <Badge
-                                    key={major}
-                                    variant="outline"
-                                    className="text-xs"
-                                  >
-                                    {major}
+                              <div className="flex gap-1 flex-wrap">
+                                {group.members
+                                  ?.slice(0, 3)
+                                  .map((member: any, idx: number) => (
+                                    <Badge
+                                      key={idx}
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {member.majorCode || "N/A"}
+                                    </Badge>
+                                  ))}
+                                {group.members && group.members.length > 3 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{group.members.length - 3}
                                   </Badge>
-                                ))}
+                                )}
                               </div>
                             </div>
                             <div>
-                              <p className="text-gray-600">Ngày tạo</p>
-                              <p className="font-semibold">
-                                {group.createdDate}
-                              </p>
+                              <p className="text-gray-600">Trạng thái</p>
+                              <Badge
+                                variant={
+                                  group.status === "active"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className="text-xs"
+                              >
+                                {group.status || "N/A"}
+                              </Badge>
                             </div>
                           </div>
-                          {group.rejectionReason && (
-                            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
-                              <p className="text-sm text-red-700">
-                                <strong>Lý do từ chối:</strong>{" "}
-                                {group.rejectionReason}
+                          {group.topicName && (
+                            <div className="mt-2">
+                              <p className="text-sm text-gray-600">
+                                <strong>Chủ đề:</strong> {group.topicName}
                               </p>
                             </div>
                           )}
@@ -227,43 +261,11 @@ export default function CourseDetailPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              toast({
-                                title: "Xem chi tiết",
-                                description: group.groupName,
-                              });
                               router.push(`/lecturer/groups/${group.groupId}`);
                             }}
                           >
                             Xem chi tiết
                           </Button>
-                          {group.approvalStatus === "pending" && (
-                            <>
-                              <Button
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700"
-                                onClick={() => {
-                                  toast({
-                                    title: "Phê duyệt nhóm",
-                                    description: `Đã phê duyệt ${group.groupName}`,
-                                  });
-                                }}
-                              >
-                                Duyệt
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => {
-                                  toast({
-                                    title: "Từ chối nhóm",
-                                    description: `Từ chối ${group.groupName}`,
-                                  });
-                                }}
-                              >
-                                Từ chối
-                              </Button>
-                            </>
-                          )}
                         </div>
                       </div>
                     </CardContent>

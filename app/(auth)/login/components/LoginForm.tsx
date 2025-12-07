@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Mail, Lock, Loader2 } from "lucide-react";
 
 import LoginAlert from "./LoginAlert";
+import LoginLoadingOverlay from "./LoginLoadingOverlay";
 import { decodeJWT, updateCurrentUser } from "@/lib/utils/auth";
 
 export default function LoginForm() {
@@ -63,8 +64,10 @@ export default function LoginForm() {
   };
 
   return (
-    <CardContent className="space-y-6">
-      <form onSubmit={handleLogin} className="space-y-5">
+    <>
+      {loading && <LoginLoadingOverlay />}
+      <CardContent className="space-y-6">
+        <form onSubmit={handleLogin} className="space-y-5">
 
         {/* Email */}
         <div className="space-y-2">
@@ -119,5 +122,6 @@ export default function LoginForm() {
         </Button>
       </form>
     </CardContent>
+    </>
   );
 }

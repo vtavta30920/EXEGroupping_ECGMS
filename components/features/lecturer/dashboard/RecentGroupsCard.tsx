@@ -64,9 +64,7 @@ export function RecentGroupsCard({ groups }: RecentGroupsCardProps) {
               <div
                 key={group.groupId}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() =>
-                  router.push(`/lecturer/groups/${group.groupId}`)
-                }
+                onClick={() => router.push(`/lecturer/groups/${group.groupId}`)}
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -76,9 +74,7 @@ export function RecentGroupsCard({ groups }: RecentGroupsCardProps) {
                     {group.status && (
                       <Badge
                         variant={
-                          group.status === "open"
-                            ? "default"
-                            : "secondary"
+                          group.status === "open" ? "default" : "secondary"
                         }
                         className="text-xs"
                       >
@@ -89,10 +85,8 @@ export function RecentGroupsCard({ groups }: RecentGroupsCardProps) {
                   <div className="flex items-center gap-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1">
                       <Users className="w-3 h-3" />
-                      {group.memberCount ||
-                        group.members?.length ||
-                        0}
-                      /{group.maxMembers || "?"} thành viên
+                      {group.memberCount || group.members?.length || 0}/
+                      {group.maxMembers || "?"} thành viên
                     </span>
                     {group.courseName && (
                       <span className="flex items-center gap-1">
@@ -111,4 +105,3 @@ export function RecentGroupsCard({ groups }: RecentGroupsCardProps) {
     </Card>
   );
 }
-

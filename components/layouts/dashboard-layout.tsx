@@ -108,7 +108,6 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
   const lecturerNavItems = [
     { name: "Dashboard", href: "/lecturer/dashboard", icon: LayoutDashboard },
-    // { name: "Courses", href: "/lecturer/courses", icon: BookOpen },
     { name: "Groups", href: "/lecturer/groups", icon: Users },
     {
       name: "Ungrouped Students",

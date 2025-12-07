@@ -131,6 +131,44 @@ const mapApiGroupToFeGroup = (g: any): FeGroup => {
 
   const groupName = g.name || "Chưa đặt tên";
   const groupId = g.id || "";
+
+  // Map isReady from API (can be "Ready", "NotReady", "1", "0", or boolean)
+  // Backend trả về is_Ready (string) trong GroupDetailsViewModel
+  // Ưu tiên check is_Ready trước vì đó là field thực tế trong response
+  const gAny = g as any;
+  const isReadyRaw =
+    gAny["is_Ready"] || // Ưu tiên: field thực tế trong response
+    gAny["Is_Ready"] || // Variant với I hoa
+    g.isReady ||
+    g.is_ready ||
+    g.isReadyGroup;
+
+  let isReady: boolean = false;
+  if (typeof isReadyRaw === "boolean") {
+    isReady = isReadyRaw;
+  } else if (typeof isReadyRaw === "string") {
+    // "Ready" -> true, "NotReady" -> false
+    isReady = isReadyRaw.toLowerCase() === "ready" || isReadyRaw === "1";
+  } else if (typeof isReadyRaw === "number") {
+    isReady = isReadyRaw === 1;
+  }
+
+  // Debug log để kiểm tra
+  if (g.id || g.groupId) {
+    console.log("🔍 [mapApiGroupToFeGroup] isReady mapping:", {
+      groupId: g.id || g.groupId,
+      isReadyRaw,
+      isReady,
+      allFields: {
+        is_Ready: gAny["is_Ready"],
+        Is_Ready: gAny["Is_Ready"],
+        isReady: g.isReady,
+        is_ready: g.is_ready,
+        isReadyGroup: g.isReadyGroup,
+      },
+    });
+  }
+
   return {
     groupId,
     groupName,
@@ -155,6 +193,7 @@ const mapApiGroupToFeGroup = (g: any): FeGroup => {
     members: feMembers,
     needs: [],
     isLockedByRule: false,
+    isReady: isReady,
   };
 };
 
@@ -968,6 +1007,145 @@ export class GroupService {
       const message =
         err instanceof Error ? err.message : "Failed to update group lecturer";
       console.error("❌ [updateGroupLecturer] Error:", message);
+      throw new Error(message);
+    }
+  }
+
+  // Update group isReady status (for group leader)
+  static async updateGroupIsReady(
+    groupId: string,
+    isReady: 0 | 1 // 0 = NotReady, 1 = Ready
+  ): Promise<FeGroup> {
+    try {
+      if (!groupId) {
+        throw new Error("groupId is required");
+      }
+
+      // Back-end expects: PUT /api/Group/UpdateIsReadyGroup{id}?isReady={0|1}
+      // Similar to UpdateLecturer{groupId} pattern - no slash before {id}
+      const url = `/api/proxy/Group/UpdateIsReadyGroup${groupId}?isReady=${isReady}`;
+
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `UpdateGroupIsReady failed: ${res.status} ${res.statusText} ${text}`
+        );
+      }
+
+      // Backend có thể trả về bool (true) hoặc GroupDetailsViewModel
+      // Để đảm bảo có data mới nhất với isReady, luôn fetch lại từ server
+      const response = await res.json();
+
+      // Nếu response là boolean (true = success), fetch lại group
+      if (typeof response === "boolean") {
+        if (response === true) {
+          // Update thành công, fetch lại group để lấy isReady mới nhất từ database
+          const freshGroup = await this.getGroupById(groupId);
+          if (freshGroup) {
+            return freshGroup;
+          }
+        }
+        throw new Error("Failed to update group isReady status");
+      }
+
+      // Nếu response là object (GroupDetailsViewModel), map nó
+      const mappedGroup = mapApiGroupToFeGroup(response);
+
+      // Verify isReady was mapped correctly, nếu không có thì fetch lại
+      if (mappedGroup.isReady === undefined || mappedGroup.isReady === null) {
+        const freshGroup = await this.getGroupById(groupId);
+        if (freshGroup) {
+          return freshGroup;
+        }
+      }
+
+      return mappedGroup;
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to update group isReady status";
+      console.error("❌ [updateGroupIsReady] Error:", message);
+      throw new Error(message);
+    }
+  }
+
+  // Update group status (for lecturer - Approved/Rejected)
+  static async updateGroupStatus(
+    groupId: string,
+    status: 0 | 1 // 0 = Rejected, 1 = Approved
+  ): Promise<FeGroup> {
+    try {
+      if (!groupId) {
+        throw new Error("groupId is required");
+      }
+
+      const url = `/api/proxy/Group/UpdateGroupStatus/${groupId}?status=${status}`;
+      console.log("📡 [updateGroupStatus] Calling API:", {
+        groupId,
+        status,
+        url,
+      });
+
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+
+      console.log(
+        "📡 [updateGroupStatus] Response status:",
+        res.status,
+        "ok:",
+        res.ok
+      );
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("❌ [updateGroupStatus] API error response:", {
+          status: res.status,
+          statusText: res.statusText,
+          text,
+        });
+
+        // If query parameter doesn't work, try as body
+        if (res.status === 400) {
+          console.log(
+            "📡 [updateGroupStatus] Query param failed, trying body..."
+          );
+          const url2 = `/api/proxy/Group/UpdateGroupStatus/${groupId}`;
+          const res2 = await fetch(url2, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+            cache: "no-store",
+          });
+
+          if (res2.ok) {
+            const updated2 = await res2.json();
+            console.log("✅ [updateGroupStatus] Success (via body)");
+            return mapApiGroupToFeGroup(updated2);
+          }
+        }
+
+        throw new Error(
+          `UpdateGroupStatus failed: ${res.status} ${res.statusText} ${text}`
+        );
+      }
+
+      const updated = await res.json();
+      console.log("✅ [updateGroupStatus] Success");
+      return mapApiGroupToFeGroup(updated);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to update group status";
+      console.error("❌ [updateGroupStatus] Error:", message);
       throw new Error(message);
     }
   }
