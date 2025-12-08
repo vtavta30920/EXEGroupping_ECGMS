@@ -1,18 +1,48 @@
-"use client"
+"use client";
 
-import { Card, CardContent } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { BookOpen, Users, Layers, AlertCircle } from "lucide-react"
-import type { DashboardData } from "@/lib/types/dashboard"
+import { Card, CardContent } from "@/components/ui/card";
+import { BookOpen, Users, Layers, AlertCircle } from "lucide-react";
+import type { DashboardData } from "@/lib/types/dashboard";
 
 export function OverviewCards({ data }: { data: DashboardData }) {
-const cards = [
-  { label: "Courses"      , value: data.activeCourses, icon: BookOpen, color: "bg-blue-50", iconColor: "text-blue-600" },
-  { label: "Total Students", value: data.students.total, icon: Users, color: "bg-red-50", iconColor: "text-red-600" },
-  { label: "Total Groups", value: data.groups.total, icon: Layers, color: "bg-emerald-50", iconColor: "text-emerald-600" },
-  { label: "Empty Groups", value: data.groups.empty, icon: AlertCircle, color: "bg-amber-50", iconColor: "text-amber-600" },
-]
+  type CardItem = {
+    label: string;
+    value: number;
+    icon: any;
+    color: string;
+    iconColor: string;
+  };
 
+  const cards: CardItem[] = [
+    {
+      label: "Total Courses",
+      value: data?.totalCourses ?? 0,
+      icon: BookOpen,
+      color: "bg-blue-50",
+      iconColor: "text-blue-600",
+    },
+    {
+      label: "Total Students",
+      value: data?.totalStudents ?? 0,
+      icon: Users,
+      color: "bg-red-50",
+      iconColor: "text-red-600",
+    },
+    {
+      label: "Total Groups",
+      value: data?.totalGroups ?? 0,
+      icon: Layers,
+      color: "bg-emerald-50",
+      iconColor: "text-emerald-600",
+    },
+    {
+      label: "Empty Groups",
+      value: data?.emptyGroups ?? 0,
+      icon: AlertCircle,
+      color: "bg-amber-50",
+      iconColor: "text-amber-600",
+    },
+  ];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -32,5 +62,5 @@ const cards = [
         </Card>
       ))}
     </div>
-  )
+  );
 }

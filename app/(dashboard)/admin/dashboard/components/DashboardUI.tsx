@@ -5,7 +5,8 @@ import { DashboardHeader } from "./DashboardHeader"
 import { OverviewCards } from "./OverviewCards"
 import { CourseProgressChart } from "./CourseProgressChart"
 import { AttentionSection } from "./AttentionSection"
-import { ActionsSection } from "./ActionsSection";
+import {ActionsSection} from "./ActionsSection"
+
 
 export function DashboardUI({ data }: { data: DashboardData }) {
   return (

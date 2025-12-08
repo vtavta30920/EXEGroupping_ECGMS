@@ -7,92 +7,78 @@ export function mapDashboardData(
   userStats: UserStatsViewModel
 ): DashboardData {
 
-  // 🔹 Chuẩn hóa status của course
+  // Normalize course status
   const normalizeStatus = (s: any): string => {
     const v = typeof s === "string" ? s.toLowerCase() : s
     if (v === 0 || v === "0" || v === "inactive" || v === "closed") return "Inactive"
     return "Active"
   }
 
-  // 🔹 Lọc courses đang active
+  // Active courses
   const activeCoursesList = (courses ?? []).filter(
     (c) => normalizeStatus(c.status) !== "Inactive"
   )
 
-  // 🔹 Số group & nhóm rỗng
+  // Group counts
   const totalGroups = groups?.length ?? 0
   const emptyGroups = groups?.filter((g) => (g.memberCount || 0) === 0).length ?? 0
 
-  // 🔹 Stats từ backend
+  // Student stats
   const totalStudents = userStats.totalStudents ?? 0
-  // const unassignedStudents = userStats.unassignedStudents ?? 0
+  const totalLecturers = userStats.totalLecturers ?? 0
 
-  // 🔹 Chuẩn bị chart progress
-  const chartMap: Record<string, { courseCode: string; full: number; empty: number }> = {}
+  // Build groupProgress
+  const progressMap: Record<string, { courseCode: string; hasGroup: number; noGroup: number }> = {}
 
   activeCoursesList.forEach((c: any) => {
-    chartMap[c.courseCode] = { courseCode: c.courseCode, full: 0, empty: 0 }
+    progressMap[c.courseCode] = { courseCode: c.courseCode, hasGroup: 0, noGroup: 0 }
   })
 
   groups?.forEach((g: any) => {
     const code = g.courseCode
-    if (!chartMap[code]) return
+    if (!progressMap[code]) return
 
-    if ((g.memberCount || 0) === 0) chartMap[code].empty++
-    else chartMap[code].full++
+    if ((g.memberCount || 0) === 0) progressMap[code].noGroup++
+    else progressMap[code].hasGroup++
   })
 
-  const courseProgress = Object.values(chartMap).map((x) => ({
-    courseCode: x.courseCode,
-    courseName: x.courseCode,
-    assigned: x.full,
-    unassigned: x.empty,
-    totalStudents: 0, // Có thể cập nhật sau
-  }))
+  const groupProgress = Object.values(progressMap)
 
-  // 🔹 Giả deadline (FE đang cần)
-  const nearestDeadline = {
-    courseCode: activeCoursesList[0]?.courseCode || "",
-    courseName: activeCoursesList[0]?.courseName || "",
-    deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  }
-
-  // 🔹 Cảnh báo nhóm thiếu người
-  const lowMemberGroups =
+  // Warnings
+  const groupsMissingMembers =
     groups
       ?.filter(
         (g: any) =>
           (g.memberCount || 0) > 0 &&
           (g.memberCount || 0) < (g.maxMembers || 5)
       )
-      ?.slice(0, 5)
       ?.map((g: any) => ({
         groupId: g.groupId,
-        name: g.groupName,
+        groupName: g.groupName,
         courseCode: g.courseCode,
         memberCount: g.memberCount,
-        maxMembers: g.maxMembers,
       })) ?? []
 
+  // groupsMissingLeader chưa có dữ liệu từ API FE → để trống
+  const groupsMissingLeader: any[] = []
+
+  // coursesNoMentor chưa có API → để trống
+  const coursesNoMentor: any[] = []
+
+  // ❤️ Return đúng type API BE & FE đang dùng
   return {
-    activeCourses: activeCoursesList.length,
+    totalCourses: activeCoursesList.length,
+    totalStudents,
+    totalLecturers,
+    totalGroups,
+    emptyGroups,
 
-    students: {
-      total: totalStudents,
-      unassigned: 0, // Có thể cập nhật sau
-    },
+    groupProgress,
 
-    groups: {
-      total: totalGroups,
-      empty: emptyGroups,
-    },
-
-    nearestDeadline,
-    courseProgress,
-
-    attentionNeeded: {
-      lowMemberGroups,
-      missingMentorCourses: [], // sẽ thêm từ API sau
+    warnings: {
+      groupsMissingLeader,
+      groupsMissingMembers,
+      coursesNoMentor,
     },
   }
 }

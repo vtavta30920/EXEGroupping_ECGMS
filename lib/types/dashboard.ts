@@ -1,13 +1,35 @@
-type DashboardData = {
-  activeCourses: number
-  students: { total: number; unassigned: number }
-  groups: { total: number; empty: number }
-  nearestDeadline: { courseCode: string; courseName: string; deadline: string }
-  courseProgress: { courseCode: string; courseName: string; assigned: number; unassigned: number; totalStudents: number }[]
-  attentionNeeded: {
-    lowMemberGroups: { groupId: string; name: string; courseCode: string; memberCount: number; maxMembers: number }[]
-    missingMentorCourses: { courseCode: string; courseName: string }[]
+export type DashboardData = {
+  totalCourses: number
+  totalStudents: number
+  totalLecturers: number
+  totalGroups: number
+  emptyGroups: number
+
+  groupProgress: {
+    courseCode: string
+    hasGroup: number
+    noGroup: number
+  }[]
+
+  warnings: {
+    groupsMissingLeader: {
+      groupId: string
+      groupName: string
+      courseCode: string
+      memberCount: number
+    }[]
+
+    groupsMissingMembers: {
+      groupId: string
+      groupName: string
+      courseCode: string
+      memberCount: number
+    }[]
+
+    coursesNoMentor: {
+      courseId: string
+      courseCode: string
+      courseName: string
+    }[]
   }
 }
-
-export type { DashboardData }

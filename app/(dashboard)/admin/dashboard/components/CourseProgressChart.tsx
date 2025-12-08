@@ -3,22 +3,24 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { BarChart3 } from "lucide-react"
 import { BarChart, Bar, CartesianGrid, XAxis, YAxis } from "recharts"
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent
+} from "@/components/ui/chart"
 import type { DashboardData } from "@/lib/types/dashboard"
 
-// export function CourseProgressChart({ data }: { data: DashboardData }) {
-//   const chartData = data.courseProgress.map((c) => ({
-//     course: c.courseName,
-//     "Đã có nhóm": c.assigned,
-//     "Chưa có nhóm": c.unassigned,
-//   }))
 export function CourseProgressChart({ data }: { data: DashboardData }) {
-  const courseProgress = data?.courseProgress ?? []
+  // API trả groupProgress — đảm bảo fallback nếu undefined
+  const progress = data?.groupProgress ?? []
 
-  const chartData = courseProgress.map((c) => ({
-    course: c.courseName,
-    "Đã có nhóm": c.assigned,
-    "Chưa có nhóm": c.unassigned,
+  // Convert thành chart data
+  const chartData = progress.map((p) => ({
+    course: p.courseCode,
+    "Đã có nhóm": p.hasGroup,
+    "Chưa có nhóm": p.noGroup,
   }))
 
   return (
@@ -28,8 +30,11 @@ export function CourseProgressChart({ data }: { data: DashboardData }) {
           <BarChart3 className="w-5 h-5" />
           Tiến độ ghép nhóm theo môn học
         </CardTitle>
-        <CardDescription>Phân bổ số sinh viên đã có nhóm và chưa có nhóm</CardDescription>
+        <CardDescription>
+          Phân bổ số nhóm đã có người và chưa có nhóm
+        </CardDescription>
       </CardHeader>
+
       <CardContent>
         <ChartContainer
           config={{
