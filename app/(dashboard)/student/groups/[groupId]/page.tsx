@@ -732,16 +732,13 @@ export default function StudentGroupDetailPage() {
               <CardContent className="space-y-2">
                 {isLeader &&
                   (() => {
-                    // Kiểm tra xem nhóm đã có status (approved/rejected) chưa
+                    // Chỉ disable khi đã được chấp nhận (approved)
                     const status = (group?.status || "").toLowerCase();
-                    const hasStatus =
-                      status === "approved" ||
-                      status === "approve" ||
-                      status === "rejected" ||
-                      status === "reject";
+                    const isApproved =
+                      status === "approved" || status === "approve";
 
-                    // Nếu đã có status, disable nút
-                    const isDisabled = hasStatus || updatingReady;
+                    // Chỉ disable khi đã approved hoặc đang cập nhật
+                    const isDisabled = isApproved || updatingReady;
 
                     return (
                       <Button
@@ -763,7 +760,7 @@ export default function StudentGroupDetailPage() {
                             <CheckCircle2 className="w-4 h-4 mr-2" />
                             {updatingReady
                               ? "Đang cập nhật..."
-                              : hasStatus
+                              : isApproved
                               ? "Nhóm đã sẵn sàng"
                               : "Chuyển về chưa sẵn sàng"}
                           </>
