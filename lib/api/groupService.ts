@@ -131,10 +131,46 @@ const mapApiGroupToFeGroup = (g: any): FeGroup => {
 
   const groupName = g.name || "Chưa đặt tên";
   const groupId = g.id || "";
+
+  // Map isReady from API (can be "Ready", "NotReady", "1", "0", or boolean)
+  // Backend trả về is_Ready (string) trong GroupDetailsViewModel
+  // Ưu tiên check is_Ready trước vì đó là field thực tế trong response
+  const gAny = g as any;
+  const isReadyRaw =
+    gAny["is_Ready"] || // Ưu tiên: field thực tế trong response
+    gAny["Is_Ready"] || // Variant với I hoa
+    g.isReady ||
+    g.is_ready ||
+    g.isReadyGroup;
+
+  let isReady: boolean = false;
+  if (typeof isReadyRaw === "boolean") {
+    isReady = isReadyRaw;
+  } else if (typeof isReadyRaw === "string") {
+    // "Ready" -> true, "NotReady" -> false
+    isReady = isReadyRaw.toLowerCase() === "ready" || isReadyRaw === "1";
+  } else if (typeof isReadyRaw === "number") {
+    isReady = isReadyRaw === 1;
+  }
+
+  // Debug log để kiểm tra
+  if (g.id || g.groupId) {
+    console.log("🔍 [mapApiGroupToFeGroup] isReady mapping:", {
+      groupId: g.id || g.groupId,
+      isReadyRaw,
+      isReady,
+      allFields: {
+        is_Ready: gAny["is_Ready"],
+        Is_Ready: gAny["Is_Ready"],
+        isReady: g.isReady,
+        is_ready: g.is_ready,
+        isReadyGroup: g.isReadyGroup,
+      },
+    });
+  }
+
   return {
     groupId,
-    // Add id as alias for backward compatibility
-    id: groupId,
     groupName,
     // Add aliases for API compatibility
     name: groupName,
@@ -157,6 +193,7 @@ const mapApiGroupToFeGroup = (g: any): FeGroup => {
     members: feMembers,
     needs: [],
     isLockedByRule: false,
+    isReady: isReady,
   };
 };
 
@@ -164,23 +201,59 @@ export class GroupService {
   static async getGroups(courseId?: string): Promise<FeGroup[]> {
     try {
       const ts = Date.now();
-      const res = await fetch(`/api/proxy/Group/GetAllGroups?_t=${ts}`, {
-        cache: "no-store",
-        next: { revalidate: 0 },
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
-        },
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
+      // First request to get total count
+      const firstRes = await fetch(
+        `/api/proxy/Group/GetAllGroups?pageNumber=1&pageSize=100&_t=${ts}`,
+        {
+          cache: "no-store",
+          next: { revalidate: 0 },
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        }
+      );
+      if (!firstRes.ok) {
+        const text = await firstRes.text().catch(() => "");
         throw new Error(
-          `GetAllGroups failed: ${res.status} ${res.statusText} ${text}`
+          `GetAllGroups failed: ${firstRes.status} ${firstRes.statusText} ${text}`
         );
       }
-      const groupsFromApi = await res.json();
-      let feGroups = (Array.isArray(groupsFromApi) ? groupsFromApi : []).map(
+
+      const firstData = await firstRes.json();
+      const totalPages = firstData.totalPages || 1;
+      let allGroups = firstData.items || [];
+
+      // Fetch remaining pages if needed
+      if (totalPages > 1) {
+        const pagePromises = [];
+        for (let page = 2; page <= totalPages; page++) {
+          pagePromises.push(
+            fetch(
+              `/api/proxy/Group/GetAllGroups?pageNumber=${page}&pageSize=100&_t=${ts}`,
+              {
+                cache: "no-store",
+                next: { revalidate: 0 },
+                headers: {
+                  "Cache-Control": "no-cache, no-store, must-revalidate",
+                  Pragma: "no-cache",
+                  Expires: "0",
+                },
+              }
+            ).then((res) => res.json())
+          );
+        }
+
+        const remainingPages = await Promise.all(pagePromises);
+        remainingPages.forEach((pageData) => {
+          if (pageData.items) {
+            allGroups = allGroups.concat(pageData.items);
+          }
+        });
+      }
+
+      let feGroups = (Array.isArray(allGroups) ? allGroups : []).map(
         mapApiGroupToFeGroup
       );
       if (courseId) {
@@ -670,34 +743,50 @@ export class GroupService {
   }
 
   // Load lecturers for a given course
-  static async getLecturersByCourse(courseId: string): Promise<{ id: string; name: string }[]> {
+  static async getLecturersByCourse(
+    courseId: string
+  ): Promise<{ id: string; name: string }[]> {
     try {
       if (!courseId) {
-        console.log('❌ [getLecturersByCourse] courseId is empty');
+        console.log("❌ [getLecturersByCourse] courseId is empty");
         return [];
       }
-      
-      console.log(`🔄 [getLecturersByCourse] Fetching lecturers for courseId: ${courseId}`);
-      const res = await fetch(`/api/proxy/LecturerCourse/by-courses/${encodeURIComponent(courseId)}`, {
-        cache: 'no-store',
-        next: { revalidate: 0 },
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      });
-      
+
+      console.log(
+        `🔄 [getLecturersByCourse] Fetching lecturers for courseId: ${courseId}`
+      );
+      const res = await fetch(
+        `/api/proxy/LecturerCourse/by-courses/${encodeURIComponent(courseId)}`,
+        {
+          cache: "no-store",
+          next: { revalidate: 0 },
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        }
+      );
+
       if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.error(`❌ [getLecturersByCourse] API failed: ${res.status} ${res.statusText} ${text}`);
-        throw new Error(`GetLecturersByCourse failed: ${res.status} ${res.statusText} ${text}`);
+        const text = await res.text().catch(() => "");
+        console.error(
+          `❌ [getLecturersByCourse] API failed: ${res.status} ${res.statusText} ${text}`
+        );
+        throw new Error(
+          `GetLecturersByCourse failed: ${res.status} ${res.statusText} ${text}`
+        );
       }
-      
+
       const data = await res.json();
-      console.log('📦 [getLecturersByCourse] Raw API response:', data);
-      console.log('📦 [getLecturersByCourse] Response type:', typeof data, 'Is Array:', Array.isArray(data));
-      
+      console.log("📦 [getLecturersByCourse] Raw API response:", data);
+      console.log(
+        "📦 [getLecturersByCourse] Response type:",
+        typeof data,
+        "Is Array:",
+        Array.isArray(data)
+      );
+
       // Handle multiple possible response formats
       let items: any[] = [];
       if (Array.isArray(data)) {
@@ -708,18 +797,20 @@ export class GroupService {
         items = data.value;
       } else if (data?.$values) {
         items = data.$values;
-      } else if (typeof data === 'object' && data !== null) {
+      } else if (typeof data === "object" && data !== null) {
         // If it's a single object (not array), try to handle it
-        console.log('📦 [getLecturersByCourse] Treating as single object');
+        console.log("📦 [getLecturersByCourse] Treating as single object");
         items = [data];
       }
-      console.log(`✅ [getLecturersByCourse] Extracted ${items.length} lecturer mappings from response`);
-      
+      console.log(
+        `✅ [getLecturersByCourse] Extracted ${items.length} lecturer mappings from response`
+      );
+
       if (items.length === 0) {
-        console.warn('⚠️ [getLecturersByCourse] No items found in response');
+        console.warn("⚠️ [getLecturersByCourse] No items found in response");
         return [];
       }
-      
+
       // Build lecturer list with IDs extracted from the mapping.
       // Backend format: { course: {...}, lecturer: { id: GUID, username, fullname } }
       // Prioritize lecturer.id as ID (this is what the UpdateLecturer API expects).
@@ -728,70 +819,112 @@ export class GroupService {
       items.forEach((item, idx) => {
         console.log(`   [Item ${idx}]:`, item);
         // Prioritize new lecturerId field first, then lecturer.lecturerId, then lecturer.id, then username
-        const lecturerId = item?.lecturerId || item?.lecturer?.lecturerId || item?.lecturer?.id || item?.lecturer?.username || item?.id;
-        const lecturerNameFromItem = item?.lecturer?.fullname || item?.lecturer?.fullName || item?.lecturer?.name || null;
+        const lecturerId =
+          item?.lecturerId ||
+          item?.lecturer?.lecturerId ||
+          item?.lecturer?.id ||
+          item?.lecturer?.username ||
+          item?.id;
+        const lecturerNameFromItem =
+          item?.lecturer?.fullname ||
+          item?.lecturer?.fullName ||
+          item?.lecturer?.name ||
+          null;
         if (lecturerId) {
           lecturerIds.add(String(lecturerId));
-          if (lecturerNameFromItem) nameMap.set(String(lecturerId), lecturerNameFromItem);
-          console.log(`   ✓ Extracted lecturer ID: ${lecturerId}`, lecturerNameFromItem ? `name=${lecturerNameFromItem}` : '');
+          if (lecturerNameFromItem)
+            nameMap.set(String(lecturerId), lecturerNameFromItem);
+          console.log(
+            `   ✓ Extracted lecturer ID: ${lecturerId}`,
+            lecturerNameFromItem ? `name=${lecturerNameFromItem}` : ""
+          );
         } else {
           console.log(`   ✗ No lecturer ID found in item`);
         }
       });
 
-      console.log(`📋 [getLecturersByCourse] Found ${lecturerIds.size} unique lecturer IDs/usernames:`, Array.from(lecturerIds));
+      console.log(
+        `📋 [getLecturersByCourse] Found ${lecturerIds.size} unique lecturer IDs/usernames:`,
+        Array.from(lecturerIds)
+      );
 
       if (lecturerIds.size === 0) {
-        console.warn('⚠️ [getLecturersByCourse] No lecturer IDs extracted from items');
+        console.warn(
+          "⚠️ [getLecturersByCourse] No lecturer IDs extracted from items"
+        );
         return [];
       }
 
       // Now resolve display names: if backend provided fullname use it; otherwise try to fetch user info
       const lecturers: { id: string; name: string }[] = [];
-      const userFetchPromises = Array.from(lecturerIds).map(async (lecturerId) => {
-        try {
-          // If name was provided in the mapping, use it directly (no extra fetch)
-          if (nameMap.has(lecturerId)) {
-            const name = nameMap.get(lecturerId) || lecturerId;
-            return { id: lecturerId, name };
-          }
+      const userFetchPromises = Array.from(lecturerIds).map(
+        async (lecturerId) => {
+          try {
+            // If name was provided in the mapping, use it directly (no extra fetch)
+            if (nameMap.has(lecturerId)) {
+              const name = nameMap.get(lecturerId) || lecturerId;
+              return { id: lecturerId, name };
+            }
 
-          console.log(`📡 [getLecturersByCourse] Fetching user details for lecturerId/username: ${lecturerId}`);
-          const userRes = await fetch(`/api/proxy/User/${encodeURIComponent(lecturerId)}`, {
-            cache: 'no-store',
-            headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-            },
-          });
+            console.log(
+              `📡 [getLecturersByCourse] Fetching user details for lecturerId/username: ${lecturerId}`
+            );
+            const userRes = await fetch(
+              `/api/proxy/User/${encodeURIComponent(lecturerId)}`,
+              {
+                cache: "no-store",
+                headers: {
+                  "Cache-Control": "no-cache, no-store, must-revalidate",
+                },
+              }
+            );
 
-          if (userRes.ok) {
-            const user = await userRes.json();
-            console.log(`👤 [getLecturersByCourse] User data for ${lecturerId}:`, user);
-            const name = user?.userProfile?.fullName || user?.username || user?.email || lecturerId;
-            return { id: lecturerId, name };
-          } else {
-            console.warn(`⚠️ [getLecturersByCourse] User fetch failed for ${lecturerId}: ${userRes.status}`);
-            // Fallback: use lecturer ID/username as label
+            if (userRes.ok) {
+              const user = await userRes.json();
+              console.log(
+                `👤 [getLecturersByCourse] User data for ${lecturerId}:`,
+                user
+              );
+              const name =
+                user?.userProfile?.fullName ||
+                user?.username ||
+                user?.email ||
+                lecturerId;
+              return { id: lecturerId, name };
+            } else {
+              console.warn(
+                `⚠️ [getLecturersByCourse] User fetch failed for ${lecturerId}: ${userRes.status}`
+              );
+              // Fallback: use lecturer ID/username as label
+              return { id: lecturerId, name: `${lecturerId}` };
+            }
+          } catch (err) {
+            console.warn(
+              `❌ [getLecturersByCourse] Error fetching user for ${lecturerId}:`,
+              err
+            );
             return { id: lecturerId, name: `${lecturerId}` };
           }
-        } catch (err) {
-          console.warn(`❌ [getLecturersByCourse] Error fetching user for ${lecturerId}:`, err);
-          return { id: lecturerId, name: `${lecturerId}` };
         }
-      });
+      );
 
       const results = await Promise.all(userFetchPromises);
-      lecturers.push(...results.filter(r => r !== null));
+      lecturers.push(...results.filter((r) => r !== null));
 
-      console.log(`📋 [getLecturersByCourse] Final lecturers list (${lecturers.length} items):`, lecturers);
+      console.log(
+        `📋 [getLecturersByCourse] Final lecturers list (${lecturers.length} items):`,
+        lecturers
+      );
 
       if (lecturers.length === 0) {
-        console.warn('⚠️ [getLecturersByCourse] Final list is empty after processing');
+        console.warn(
+          "⚠️ [getLecturersByCourse] Final list is empty after processing"
+        );
       }
 
       return lecturers;
     } catch (err) {
-      console.error('❌ [getLecturersByCourse] Fatal error:', err);
+      console.error("❌ [getLecturersByCourse] Fatal error:", err);
       return [];
     }
   }
@@ -800,50 +933,219 @@ export class GroupService {
   static async getLecturersRaw(courseId: string): Promise<any> {
     try {
       if (!courseId) return null;
-      console.log(`🔎 [getLecturersRaw] Fetching raw LecturerCourse for courseId: ${courseId}`);
-      const res = await fetch(`/api/proxy/LecturerCourse/by-courses/${encodeURIComponent(courseId)}`, {
-        cache: 'no-store',
-        next: { revalidate: 0 },
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-        },
-      });
-      console.log(`🔎 [getLecturersRaw] Response status: ${res.status} ok=${res.ok} content-type=${res.headers.get('content-type')}`);
-      const text = await res.text().catch(() => '')
+      console.log(
+        `🔎 [getLecturersRaw] Fetching raw LecturerCourse for courseId: ${courseId}`
+      );
+      const res = await fetch(
+        `/api/proxy/LecturerCourse/by-courses/${encodeURIComponent(courseId)}`,
+        {
+          cache: "no-store",
+          next: { revalidate: 0 },
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+          },
+        }
+      );
+      console.log(
+        `🔎 [getLecturersRaw] Response status: ${res.status} ok=${
+          res.ok
+        } content-type=${res.headers.get("content-type")}`
+      );
+      const text = await res.text().catch(() => "");
       try {
-        return JSON.parse(text || 'null');
+        return JSON.parse(text || "null");
       } catch (e) {
         return text;
       }
     } catch (err) {
-      console.error('❌ [getLecturersRaw] Error:', err);
+      console.error("❌ [getLecturersRaw] Error:", err);
       return null;
     }
   }
 
   // Update group lecturer
-  static async updateGroupLecturer(groupId: string, lecturerId: string): Promise<void> {
+  static async updateGroupLecturer(
+    groupId: string,
+    lecturerId: string
+  ): Promise<void> {
     try {
       if (!groupId || !lecturerId) {
-        throw new Error('groupId and lecturerId are required');
+        throw new Error("groupId and lecturerId are required");
       }
-      const url = `/api/proxy/Group/UpdateLecturer${groupId}?lecturerId=${encodeURIComponent(lecturerId)}`;
-      console.log('📡 [updateGroupLecturer] Calling API:', { groupId, lecturerId, url });
-      const res = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
+      const url = `/api/proxy/Group/UpdateLecturer${groupId}?lecturerId=${encodeURIComponent(
+        lecturerId
+      )}`;
+      console.log("📡 [updateGroupLecturer] Calling API:", {
+        groupId,
+        lecturerId,
+        url,
       });
-      console.log('📡 [updateGroupLecturer] Response status:', res.status, 'ok:', res.ok);
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+      console.log(
+        "📡 [updateGroupLecturer] Response status:",
+        res.status,
+        "ok:",
+        res.ok
+      );
       if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.error('❌ [updateGroupLecturer] API error response:', { status: res.status, statusText: res.statusText, text });
-        throw new Error(`UpdateGroupLecturer failed: ${res.status} ${res.statusText} ${text}`);
+        const text = await res.text().catch(() => "");
+        console.error("❌ [updateGroupLecturer] API error response:", {
+          status: res.status,
+          statusText: res.statusText,
+          text,
+        });
+        throw new Error(
+          `UpdateGroupLecturer failed: ${res.status} ${res.statusText} ${text}`
+        );
       }
-      console.log('✅ [updateGroupLecturer] Success');
+      console.log("✅ [updateGroupLecturer] Success");
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update group lecturer';
-      console.error('❌ [updateGroupLecturer] Error:', message);
+      const message =
+        err instanceof Error ? err.message : "Failed to update group lecturer";
+      console.error("❌ [updateGroupLecturer] Error:", message);
+      throw new Error(message);
+    }
+  }
+
+  // Update group isReady status (for group leader)
+  static async updateGroupIsReady(
+    groupId: string,
+    isReady: 0 | 1 // 0 = NotReady, 1 = Ready
+  ): Promise<FeGroup> {
+    try {
+      if (!groupId) {
+        throw new Error("groupId is required");
+      }
+
+      // Back-end expects: PUT /api/Group/UpdateIsReadyGroup{id}?isReady={0|1}
+      // Similar to UpdateLecturer{groupId} pattern - no slash before {id}
+      const url = `/api/proxy/Group/UpdateIsReadyGroup${groupId}?isReady=${isReady}`;
+
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `UpdateGroupIsReady failed: ${res.status} ${res.statusText} ${text}`
+        );
+      }
+
+      // Backend có thể trả về bool (true) hoặc GroupDetailsViewModel
+      // Để đảm bảo có data mới nhất với isReady, luôn fetch lại từ server
+      const response = await res.json();
+
+      // Nếu response là boolean (true = success), fetch lại group
+      if (typeof response === "boolean") {
+        if (response === true) {
+          // Update thành công, fetch lại group để lấy isReady mới nhất từ database
+          const freshGroup = await this.getGroupById(groupId);
+          if (freshGroup) {
+            return freshGroup;
+          }
+        }
+        throw new Error("Failed to update group isReady status");
+      }
+
+      // Nếu response là object (GroupDetailsViewModel), map nó
+      const mappedGroup = mapApiGroupToFeGroup(response);
+
+      // Verify isReady was mapped correctly, nếu không có thì fetch lại
+      if (mappedGroup.isReady === undefined || mappedGroup.isReady === null) {
+        const freshGroup = await this.getGroupById(groupId);
+        if (freshGroup) {
+          return freshGroup;
+        }
+      }
+
+      return mappedGroup;
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to update group isReady status";
+      console.error("❌ [updateGroupIsReady] Error:", message);
+      throw new Error(message);
+    }
+  }
+
+  // Update group status (for lecturer - Approved/Rejected)
+  static async updateGroupStatus(
+    groupId: string,
+    status: 0 | 1 // 0 = Rejected, 1 = Approved
+  ): Promise<FeGroup> {
+    try {
+      if (!groupId) {
+        throw new Error("groupId is required");
+      }
+
+      const url = `/api/proxy/Group/UpdateGroupStatus/${groupId}?status=${status}`;
+      console.log("📡 [updateGroupStatus] Calling API:", {
+        groupId,
+        status,
+        url,
+      });
+
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+
+      console.log(
+        "📡 [updateGroupStatus] Response status:",
+        res.status,
+        "ok:",
+        res.ok
+      );
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("❌ [updateGroupStatus] API error response:", {
+          status: res.status,
+          statusText: res.statusText,
+          text,
+        });
+
+        // If query parameter doesn't work, try as body
+        if (res.status === 400) {
+          console.log(
+            "📡 [updateGroupStatus] Query param failed, trying body..."
+          );
+          const url2 = `/api/proxy/Group/UpdateGroupStatus/${groupId}`;
+          const res2 = await fetch(url2, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+            cache: "no-store",
+          });
+
+          if (res2.ok) {
+            const updated2 = await res2.json();
+            console.log("✅ [updateGroupStatus] Success (via body)");
+            return mapApiGroupToFeGroup(updated2);
+          }
+        }
+
+        throw new Error(
+          `UpdateGroupStatus failed: ${res.status} ${res.statusText} ${text}`
+        );
+      }
+
+      const updated = await res.json();
+      console.log("✅ [updateGroupStatus] Success");
+      return mapApiGroupToFeGroup(updated);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to update group status";
+      console.error("❌ [updateGroupStatus] Error:", message);
       throw new Error(message);
     }
   }
