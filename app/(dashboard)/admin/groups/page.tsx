@@ -697,18 +697,13 @@ const loadGroups = React.useCallback(async (courseCode: string) => {
                               variant="outline"
                               size="sm"
                               onClick={() => {
-                                const c = courses.find(
-                                  (c) => c.courseCode === g.courseCode
-                                );
-                                setEditTarget({
-                                  id: g.id,
-                                  name: g.name,
-                                  courseCode: g.courseCode,
-                                });
-                                if (c?.courseId)
-                                  loadCourseLecturer(c.courseId, c.courseCode);
-                                setEditOpen(true);
-                              }}
+                                const c = courses.find(c => c.courseCode === g.courseCode)
+                                const courseIdForGroup = c?.courseId || selectedCourseId
+                                console.log('✏️ [Edit Button] Clicked on group:', { groupId: g.id, groupName: g.name, courseCode: g.courseCode, courseId: courseIdForGroup, lecturerId: g.lecturerId });
+                                setEditTarget({ id: g.id, name: g.name, courseCode: g.courseCode, courseId: courseIdForGroup, lecturerId: g.lecturerId || '' })
+                                if (c?.courseId) loadCourseLecturer(c.courseId, c.courseCode)
+                                setEditOpen(true)
+                              }}  
                             >
                               Sửa
                             </Button>

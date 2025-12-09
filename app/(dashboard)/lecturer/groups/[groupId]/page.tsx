@@ -24,6 +24,10 @@ import {
   Search,
   AlertCircle,
   X,
+  CheckCircle2,
+  XCircle,
+  Check,
+  X as XIcon,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { useToast } from "@/lib/hooks/use-toast";
@@ -67,6 +71,14 @@ export default function GroupDetailPage() {
     open: false,
     title: "",
     message: "",
+  });
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusDialog, setStatusDialog] = useState<{
+    open: boolean;
+    action: "approve" | "reject" | null;
+  }>({
+    open: false,
+    action: null,
   });
   const { toast } = useToast();
 
@@ -123,6 +135,93 @@ export default function GroupDetailPage() {
     loadGroup();
     loadStudentsWithoutGroup();
   }, [router, params.groupId, toast]);
+
+  const handleUpdateStatus = async (action: "approve" | "reject") => {
+    if (!group) {
+      toast({
+        title: "Lỗi",
+        description: "Không tìm thấy thông tin nhóm",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setUpdatingStatus(true);
+      const statusValue = action === "approve" ? 1 : 0; // 1 = Approved, 0 = Rejected
+
+      await GroupService.updateGroupStatus(group.groupId, statusValue as 0 | 1);
+
+      toast({
+        title: "Cập nhật thành công",
+        description: `Nhóm đã được ${
+          action === "approve" ? "phê duyệt" : "từ chối"
+        }`,
+      });
+
+      setStatusDialog({ open: false, action: null });
+
+      // Reload group to get updated status
+      const updated = await GroupService.getGroupById(group.groupId);
+      if (updated) {
+        setGroup(updated);
+      }
+
+      // Reload page để đảm bảo data được cập nhật
+      router.refresh();
+    } catch (error) {
+      console.error("Error updating group status:", error);
+      const errorMessage =
+        error instanceof Error && error.message
+          ? error.message
+          : "Không thể cập nhật trạng thái nhóm";
+
+      // Handle specific error cases
+      if (
+        errorMessage.includes("401") ||
+        errorMessage.includes("Unauthorized")
+      ) {
+        toast({
+          title: "Lỗi xác thực",
+          description: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+          variant: "destructive",
+        });
+        router.push("/login");
+      } else if (
+        errorMessage.includes("404") ||
+        errorMessage.includes("Not Found")
+      ) {
+        toast({
+          title: "Lỗi",
+          description: "Không tìm thấy nhóm. Vui lòng làm mới trang.",
+          variant: "destructive",
+        });
+        // Reload group
+        try {
+          const reloaded = await GroupService.getGroupById(group.groupId);
+          if (reloaded) {
+            setGroup(reloaded);
+          }
+        } catch (reloadError) {
+          console.error("Error reloading group:", reloadError);
+        }
+      } else {
+        toast({
+          title: "Lỗi",
+          description: errorMessage,
+          variant: "destructive",
+        });
+
+        setErrorDialog({
+          open: true,
+          title: "Lỗi khi cập nhật trạng thái",
+          message: errorMessage,
+        });
+      }
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   const handleOpenAddDialog = () => {
     setSelectedStudentId("");
@@ -245,10 +344,29 @@ export default function GroupDetailPage() {
     );
   }
 
-  const statusColor =
-    group.status === "open"
-      ? "bg-green-100 text-green-700"
-      : "bg-gray-100 text-gray-700";
+  // Helper function để lấy màu sắc cho status
+  const getStatusColor = (status: string | null | undefined) => {
+    if (!status) return "bg-gray-100 text-gray-700 border-gray-300";
+    const statusLower = status.toLowerCase();
+    if (statusLower === "approved" || statusLower === "approve") {
+      return "bg-green-100 text-green-800 border-green-300";
+    }
+    if (statusLower === "rejected" || statusLower === "reject") {
+      return "bg-red-100 text-red-800 border-red-300";
+    }
+    if (statusLower === "pending") {
+      return "bg-yellow-100 text-yellow-800 border-yellow-300";
+    }
+    return "bg-blue-100 text-blue-800 border-blue-300";
+  };
+
+  // Helper function để lấy màu sắc cho isReady
+  const getReadyColor = (isReady: boolean | undefined) => {
+    if (isReady === true) {
+      return "bg-emerald-100 text-emerald-800 border-emerald-300";
+    }
+    return "bg-orange-100 text-orange-800 border-orange-300";
+  };
 
   const filteredStudentsForSelect = studentsWithoutGroup.filter((s) => {
     if (!studentSearch) return true;
@@ -288,31 +406,118 @@ export default function GroupDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-gray-600">Trạng thái</p>
-                <Badge className={statusColor}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-600">Trạng thái</p>
+                <Badge
+                  className={`border ${getStatusColor(
+                    group.status
+                  )} text-sm px-3 py-1.5`}
+                >
                   {group.status ? group.status : "Chưa cập nhật"}
                 </Badge>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Số thành viên</p>
-                <p className="font-semibold">
-                  {group.members.length}
-                  {group.maxMembers ? ` / ${group.maxMembers}` : ""}
-                </p>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-600">Sẵn sàng</p>
+                <Badge
+                  className={`flex items-center gap-1.5 w-fit border text-sm px-3 py-1.5 ${getReadyColor(
+                    group.isReady
+                  )}`}
+                >
+                  {group.isReady ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" /> Sẵn sàng
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4" /> Chưa sẵn sàng
+                    </>
+                  )}
+                </Badge>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Chủ đề</p>
-                <p className="font-semibold">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-600">
+                  Số thành viên
+                </p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-2xl font-bold text-gray-900">
+                    {group.members.length}
+                  </p>
+                  {group.maxMembers && (
+                    <p className="text-sm text-gray-500">
+                      / {group.maxMembers}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-600">Chủ đề</p>
+                <p className="font-semibold text-gray-900">
                   {group.topicName || "Chưa có chủ đề"}
                 </p>
               </div>
-              {/* <div>
-                <p className="text-sm text-gray-600">Mã môn học</p>
-                <p className="font-semibold">{group.courseId}</p>
-              </div> */}
             </div>
+            {group.isReady &&
+              (() => {
+                // Chỉ hiển thị khi nhóm sẵn sàng và chưa có status (chưa được phê duyệt hoặc từ chối)
+                const status = (group.status || "").toLowerCase();
+                const hasStatus =
+                  status === "approved" ||
+                  status === "approve" ||
+                  status === "rejected" ||
+                  status === "reject";
+
+                if (hasStatus) return null;
+
+                return (
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-emerald-900 mb-1">
+                            Nhóm đã sẵn sàng
+                          </p>
+                          <p className="text-sm text-emerald-700 mb-3">
+                            Bạn có thể phê duyệt hoặc từ chối nhóm này
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() =>
+                                setStatusDialog({
+                                  open: true,
+                                  action: "approve",
+                                })
+                              }
+                              disabled={updatingStatus}
+                            >
+                              <Check className="w-4 h-4 mr-2" />
+                              Phê duyệt
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="bg-red-600 hover:bg-red-700"
+                              onClick={() =>
+                                setStatusDialog({
+                                  open: true,
+                                  action: "reject",
+                                })
+                              }
+                              disabled={updatingStatus}
+                            >
+                              <XIcon className="w-4 h-4 mr-2" />
+                              Từ chối
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
           </CardContent>
         </Card>
 
@@ -355,7 +560,7 @@ export default function GroupDetailPage() {
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <div className="flex items-center gap-2">
                               <h3 className="font-semibold text-lg">
-                                {member.username}
+                                {member.fullName}
                               </h3>
                               {member.roleInGroup && (
                                 <Badge
@@ -416,7 +621,7 @@ export default function GroupDetailPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
-                    placeholder="Nhập tên, email hoặc username..."
+                    placeholder="Nhập tên hoặc email "
                     value={studentSearch}
                     onChange={(e) => setStudentSearch(e.target.value)}
                     className="pl-9"
@@ -465,9 +670,7 @@ export default function GroupDetailPage() {
         {/* Delete Member Dialog */}
         <Dialog
           open={deleteDialog.open}
-          onOpenChange={(open) =>
-            setDeleteDialog({ ...deleteDialog, open })
-          }
+          onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
         >
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
@@ -503,10 +706,7 @@ export default function GroupDetailPage() {
                       </p>
                     )}
                     {deleteDialog.member?.roleInGroup && (
-                      <Badge
-                        variant="outline"
-                        className="mt-1 text-xs"
-                      >
+                      <Badge variant="outline" className="mt-1 text-xs">
                         {deleteDialog.member.roleInGroup}
                       </Badge>
                     )}
@@ -520,7 +720,8 @@ export default function GroupDetailPage() {
                     deleteDialog.member?.username ||
                     "thành viên này"}
                 </span>{" "}
-                khỏi nhóm <span className="font-semibold">{group?.groupName}</span>?
+                khỏi nhóm{" "}
+                <span className="font-semibold">{group?.groupName}</span>?
               </p>
             </div>
             <DialogFooter className="gap-2">
@@ -554,8 +755,9 @@ export default function GroupDetailPage() {
                       setGroup(updatedGroup);
                     } else {
                       // Fallback: reload the group
-                      const reloadedGroup =
-                        await GroupService.getGroupById(groupId);
+                      const reloadedGroup = await GroupService.getGroupById(
+                        groupId
+                      );
                       if (reloadedGroup) {
                         setGroup(reloadedGroup);
                       }
@@ -566,13 +768,9 @@ export default function GroupDetailPage() {
                     toast({
                       title: "✅ Đã xóa thành viên khỏi nhóm",
                       description: `${memberName} đã được xóa khỏi nhóm thành công.`,
-                      className: "bg-green-50 border-green-200",
                     });
                   } catch (error) {
-                    console.error(
-                      "Error removing member from group:",
-                      error
-                    );
+                    console.error("Error removing member from group:", error);
                     const description =
                       error instanceof Error && error.message
                         ? error.message
@@ -618,6 +816,58 @@ export default function GroupDetailPage() {
                 className="bg-red-600 hover:bg-red-700"
               >
                 Đã hiểu
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Status Update Dialog */}
+        <Dialog
+          open={statusDialog.open}
+          onOpenChange={(open) => setStatusDialog({ ...statusDialog, open })}
+        >
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>
+                {statusDialog.action === "approve"
+                  ? "Phê duyệt nhóm"
+                  : "Từ chối nhóm"}
+              </DialogTitle>
+              <DialogDescription>
+                {statusDialog.action === "approve"
+                  ? `Bạn có chắc chắn muốn phê duyệt nhóm "${group?.name}" không?`
+                  : `Bạn có chắc chắn muốn từ chối nhóm "${group?.name}" không?`}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setStatusDialog({ open: false, action: null })}
+                disabled={updatingStatus}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant={
+                  statusDialog.action === "approve" ? "default" : "destructive"
+                }
+                onClick={() => {
+                  if (statusDialog.action) {
+                    handleUpdateStatus(statusDialog.action);
+                  }
+                }}
+                disabled={updatingStatus}
+                className={
+                  statusDialog.action === "approve"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : ""
+                }
+              >
+                {updatingStatus
+                  ? "Đang xử lý..."
+                  : statusDialog.action === "approve"
+                  ? "Phê duyệt"
+                  : "Từ chối"}
               </Button>
             </DialogFooter>
           </DialogContent>

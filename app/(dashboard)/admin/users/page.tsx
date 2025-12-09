@@ -120,39 +120,44 @@
 //     }
 //   }, []);
 
-//   const fetchLecturers = React.useCallback(async () => {
-//     setIsLoadingLecturers(true);
-//     try {
-//       const timestamp = new Date().getTime();
-//       const res = await fetch(`/api/proxy/User/Lecturer?_t=${timestamp}`, {
-//         cache: "no-store",
-//         headers: { "Cache-Control": "no-cache" },
-//       });
-//       if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
-//       const data = await res.json();
-//       const mapped = (Array.isArray(data) ? data : []).map((item: any) => ({
-//         id:
-//           item?.user?.id ||
-//           item?.userProfileViewModel?.userId ||
-//           item?.studentId ||
-//           "",
-//         username: item?.user?.username || "",
-//         email: item?.user?.email || "",
-//         userProfile: {
-//           fullName:
-//             item?.userProfileViewModel?.fullName || item?.user?.username || "",
-//           major: item?.userProfileViewModel?.major || null,
-//         },
-//         skillSet: item?.user?.skillSet || "",
-//       })) as Student[];
-//       setLecturers(mapped);
-//       setLastFetchTime(new Date());
-//     } catch (error: any) {
-//       toast.error("Failed to load lecturers", { description: error.message });
-//     } finally {
-//       setIsLoadingLecturers(false);
-//     }
-//   }, []);
+const fetchLecturers = React.useCallback(async () => {
+  setIsLoadingLecturers(true);
+  try {
+    const timestamp = new Date().getTime();
+    const res = await fetch(
+      `/api/proxy/User/Lecturer?pageSize=100&_t=${timestamp}`,
+      {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      }
+    );
+    if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+    const data = await res.json();
+    // Handle paginated response: { items: [...] }
+    const items = data.items || (Array.isArray(data) ? data : []);
+    const mapped = items.map((item: any) => ({
+      id:
+        item?.user?.id ||
+        item?.userProfileViewModel?.userId ||
+        item?.studentId ||
+        "",
+      username: item?.user?.username || "",
+      email: item?.user?.email || "",
+      userProfile: {
+        fullName:
+          item?.userProfileViewModel?.fullName || item?.user?.username || "",
+        major: item?.userProfileViewModel?.major || null,
+      },
+      skillSet: item?.user?.skillSet || "",
+    })) as Student[];
+    setLecturers(mapped);
+    setLastFetchTime(new Date());
+  } catch (error: any) {
+    toast.error("Failed to load lecturers", { description: error.message });
+  } finally {
+    setIsLoadingLecturers(false);
+  }
+}, []);
 
 //   React.useEffect(() => {
 //     fetchStudents();

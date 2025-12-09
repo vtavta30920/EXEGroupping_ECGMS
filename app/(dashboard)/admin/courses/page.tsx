@@ -36,6 +36,8 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { AssignLecturerDialog } from "@/components/features/course/AssignLecturerDialog"
+import { Users } from "lucide-react"
 
 // --- SỬA LỖI TẠI ĐÂY ---
 // Import từ Adapter (lib/api/courseService), KHÔNG PHẢI generated
@@ -62,6 +64,9 @@ export default function AdminCoursesPage() {
     const saved = localStorage.getItem('useMock');
     return saved ? saved === 'true' : true;
   });
+  
+  // State for Assign Lecturer Dialog
+  const [assignLecturerCourse, setAssignLecturerCourse] = React.useState<Course | null>(null);
   // Đã loại bỏ form "Tạo Khóa học mới" theo yêu cầu
 
   async function fetchCourses() {
@@ -254,6 +259,10 @@ export default function AdminCoursesPage() {
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setAssignLecturerCourse(course)}>
+                                <Users className="mr-2 h-4 w-4" />
+                                Phân công Giảng viên
+                              </DropdownMenuItem>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <DropdownMenuItem
@@ -298,6 +307,15 @@ export default function AdminCoursesPage() {
             onSave={handleUpdateCourse}
             course={editingCourse}
           />
+      )}
+
+      {assignLecturerCourse && (
+        <AssignLecturerDialog
+          isOpen={!!assignLecturerCourse}
+          onClose={() => setAssignLecturerCourse(null)}
+          courseId={assignLecturerCourse.courseId}
+          courseName={assignLecturerCourse.courseName || assignLecturerCourse.courseCode}
+        />
       )}
 
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>

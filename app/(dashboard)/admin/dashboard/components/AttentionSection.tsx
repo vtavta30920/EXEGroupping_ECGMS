@@ -1,28 +1,16 @@
 "use client";
 
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { AlertCircle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import type { DashboardData } from "@/lib/types/dashboard";
-import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { AlertCircle } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import type { DashboardData } from "@/lib/types/dashboard"
 
 export function AttentionSection({ data }: { data: DashboardData }) {
-  const lowMemberGroups = data?.warnings?.groupsMissingMembers ?? [];
-  const missingMentorCourses = data?.warnings?.coursesNoMentor ?? [];
+  // 🔹 Sử dụng warnings đúng từ DashboardData
+  const lowMemberGroups = data?.warnings?.groupsMissingMembers ?? []
+  const coursesNoMentor = data?.warnings?.coursesNoMentor ?? []
 
   return (
     <Card>
@@ -56,11 +44,8 @@ export function AttentionSection({ data }: { data: DashboardData }) {
             <TableBody>
               {lowMemberGroups.length === 0 && (
                 <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="text-center text-gray-500 py-4"
-                  >
-                    Không có nhóm nào cần chú ý
+                  <TableCell colSpan={4} className="text-center text-gray-500 py-4">
+                    Không có nhóm nào thiếu người
                   </TableCell>
                 </TableRow>
               )}
@@ -90,19 +75,18 @@ export function AttentionSection({ data }: { data: DashboardData }) {
           </p>
 
           <div className="flex flex-wrap gap-2">
-            {missingMentorCourses.length === 0 && (
-              <span className="text-gray-500 text-sm">
-                Tất cả môn đã có mentor
-              </span>
+            {coursesNoMentor.length === 0 && (
+              <span className="text-gray-500 text-sm">Tất cả môn đã có mentor</span>
             )}
 
-            {missingMentorCourses.map((c) => (
+            {coursesNoMentor.map((c) => (
               <Badge key={c.courseCode} variant="secondary">
                 {c.courseCode}
               </Badge>
             ))}
           </div>
         </div>
+
       </CardContent>
     </Card>
   );

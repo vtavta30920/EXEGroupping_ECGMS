@@ -63,8 +63,9 @@ export default function LoginForm() {
   };
 
   return (
-    <CardContent className="space-y-6">
-      <form onSubmit={handleLogin} className="space-y-5">
+    <>
+      <CardContent className="space-y-6">
+        <form onSubmit={handleLogin} className="space-y-5">
 
         {/* Email */}
         <div className="space-y-2">
@@ -119,5 +120,6 @@ export default function LoginForm() {
         </Button>
       </form>
     </CardContent>
+    </>
   );
 }

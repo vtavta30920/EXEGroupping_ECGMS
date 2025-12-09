@@ -18,19 +18,15 @@ import {
 } from "@/components/ui/chart";
 import type { DashboardData } from "@/lib/types/dashboard";
 
-// export function CourseProgressChart({ data }: { data: DashboardData }) {
-//   const chartData = data.courseProgress.map((c) => ({
-//     course: c.courseName,
-//     "Đã có nhóm": c.assigned,
-//     "Chưa có nhóm": c.unassigned,
-//   }))
 export function CourseProgressChart({ data }: { data: DashboardData }) {
-  const courseProgress = data?.groupProgress ?? [];
+  // API trả groupProgress — đảm bảo fallback nếu undefined
+  const progress = data?.groupProgress ?? [];
 
-  const chartData = courseProgress.map((c) => ({
-    course: c.courseCode,
-    "Đã có nhóm": c.hasGroup,
-    "Chưa có nhóm": c.noGroup,
+  // Convert thành chart data
+  const chartData = progress.map((p) => ({
+    course: p.courseCode,
+    "Đã có nhóm": p.hasGroup,
+    "Chưa có nhóm": p.noGroup,
   }));
 
   return (
@@ -41,9 +37,10 @@ export function CourseProgressChart({ data }: { data: DashboardData }) {
           Tiến độ ghép nhóm theo môn học
         </CardTitle>
         <CardDescription>
-          Phân bổ số sinh viên đã có nhóm và chưa có nhóm
+          Phân bổ số nhóm đã có người và chưa có nhóm
         </CardDescription>
       </CardHeader>
+
       <CardContent>
         <ChartContainer
           config={{
