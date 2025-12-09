@@ -72,7 +72,7 @@ export default function StudentsWithoutGroupPage() {
     loadStudents();
   }, [router, loadStudents]);
 
-  // Memoized filtered students - more efficient than useEffect
+  // Memoized filtered and sorted students - more efficient than useEffect
   const filteredStudents = useMemo(() => {
     // Ensure students is always an array
     if (!Array.isArray(students)) {
@@ -107,6 +107,23 @@ export default function StudentsWithoutGroupPage() {
       );
     }
 
+    // Sort: first by major code (SE before SS), then by core skill, then by full name
+    filtered.sort((a, b) => {
+      // Sort by major code first (SE comes before SS)
+      if (a.majorCode !== b.majorCode) {
+        return a.majorCode.localeCompare(b.majorCode);
+      }
+      // Then by core skill
+      if (a.coreSkill !== b.coreSkill) {
+        return a.coreSkill.localeCompare(b.coreSkill);
+      }
+      // Finally by full name
+      return a.userProfileViewModel.fullName.localeCompare(
+        b.userProfileViewModel.fullName,
+        "vi"
+      );
+    });
+
     return filtered;
   }, [debouncedSearchTerm, filterMajor, filterSkill, students]);
 
@@ -139,10 +156,9 @@ export default function StudentsWithoutGroupPage() {
         "Tên đăng nhập": student.user.username,
         "Họ và tên": student.userProfileViewModel.fullName,
         Email: student.user.email,
-        Ngành: student.majorCode,
+        "Mã ngành": student.majorCode,
         "Tên ngành": student.userProfileViewModel.major.name,
         "Kỹ năng chính": student.coreSkill,
-        "Skill Set": student.user.skillSet,
         Bio: student.userProfileViewModel.bio,
       }));
 
@@ -161,10 +177,9 @@ export default function StudentsWithoutGroupPage() {
         { wch: 20 }, // Tên đăng nhập
         { wch: 30 }, // Họ và tên
         { wch: 35 }, // Email
-        { wch: 10 }, // Ngành
+        { wch: 12 }, // Mã ngành
         { wch: 30 }, // Tên ngành
         { wch: 20 }, // Kỹ năng chính
-        { wch: 20 }, // Skill Set
         { wch: 15 }, // Bio
       ];
       worksheet["!cols"] = columnWidths;

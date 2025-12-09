@@ -37,6 +37,8 @@ export function StudentsTable({
         return "bg-green-100 text-green-700 border-green-200";
       case "marketing":
         return "bg-purple-100 text-purple-700 border-purple-200";
+      case "sale":
+        return "bg-orange-100 text-orange-700 border-orange-200";
       case "saleing":
         return "bg-orange-100 text-orange-700 border-orange-200";
       default:
@@ -70,13 +72,12 @@ export function StudentsTable({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>STT</TableHead>
-                <TableHead>Họ và tên</TableHead>
-                <TableHead>Username</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Ngành</TableHead>
-                <TableHead>Kỹ năng chính</TableHead>
-                <TableHead>Skill Set</TableHead>
+                <TableHead className="w-16">STT</TableHead>
+                <TableHead className="min-w-[200px]">Họ và tên</TableHead>
+                <TableHead className="min-w-[150px]">Username</TableHead>
+                <TableHead className="min-w-[250px]">Email</TableHead>
+                <TableHead className="min-w-[150px]">Ngành</TableHead>
+                <TableHead className="min-w-[150px]">Kỹ năng chính</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -113,23 +114,17 @@ export function StudentsTable({
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={getMajorBadgeColor(student.majorCode)}
+                      className={`${getMajorBadgeColor(student.majorCode)} font-medium`}
                     >
-                      {student.majorCode} -{" "}
-                      {student.userProfileViewModel.major.name}
+                      {student.majorCode}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={getSkillBadgeColor(student.coreSkill)}
+                      className={`${getSkillBadgeColor(student.coreSkill)} font-medium px-2.5 py-1`}
                     >
                       {student.coreSkill}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {student.user.skillSet}
                     </Badge>
                   </TableCell>
                 </TableRow>

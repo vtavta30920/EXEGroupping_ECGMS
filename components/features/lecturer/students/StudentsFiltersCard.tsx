@@ -33,9 +33,19 @@ export function StudentsFiltersCard({
   const uniqueMajors = Array.from(
     new Set(students.map((s) => s.majorCode))
   ).sort();
+  
+  // Get unique skills and sort them in a logical order
+  const skillOrder = ["FrontEnd", "BackEnd", "Marketing", "Sale"];
   const uniqueSkills = Array.from(
     new Set(students.map((s) => s.coreSkill))
-  ).sort();
+  ).sort((a, b) => {
+    const indexA = skillOrder.findIndex(s => s.toLowerCase() === a.toLowerCase());
+    const indexB = skillOrder.findIndex(s => s.toLowerCase() === b.toLowerCase());
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    return a.localeCompare(b);
+  });
 
   return (
     <Card>
