@@ -615,7 +615,10 @@ export default function StudentGroupDetailPage() {
                                   memberUserId === currentUserId;
 
                                 const shouldShowKick =
-                                  isLeader && !isMemberLeader && !isCurrentUser;
+                                  isLeader &&
+                                  !isMemberLeader &&
+                                  !isCurrentUser &&
+                                  !group?.isReady;
 
                                 return shouldShowKick ? (
                                   <Button
@@ -791,7 +794,9 @@ export default function StudentGroupDetailPage() {
                 ) : null}
                 <Button
                   variant="destructive"
+                  disabled={group?.isReady}
                   onClick={() => {
+                    if (group?.isReady) return;
                     // If current user is leader and there are other members, require transfer first
                     const memberCount = group?.members
                       ? group.members.length
@@ -804,7 +809,9 @@ export default function StudentGroupDetailPage() {
                   }}
                   className="w-full"
                 >
-                  Rời nhóm
+                  {group?.isReady
+                    ? "Nhóm đã sẵn sàng (Không thể rời)"
+                    : "Rời nhóm"}
                 </Button>
               </CardContent>
             </Card>
