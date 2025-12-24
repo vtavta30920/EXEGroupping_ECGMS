@@ -359,6 +359,7 @@ export default function StudentDashboard() {
                 <div className="space-y-2">
                   <div className="text-3xl font-bold">{gpa}</div>
                   <div className="text-sm text-gray-600">GPA tạm tính dựa trên điểm có sẵn</div>
+                  <Badge variant="secondary" className="mt-2">Dữ liệu mẫu</Badge>
                 </div>
               )}
             </CardContent>
@@ -388,29 +389,49 @@ export default function StudentDashboard() {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Phân bố trạng thái công việc</CardTitle>
-            <CardDescription>Thống kê công việc theo trạng thái</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : (
-              <div className="h-48 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={statusChart}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#2563eb" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+            <CardHeader>
+                <CardTitle>Phân bố trạng thái công việc</CardTitle>
+                <CardDescription>Thống kê công việc theo trạng thái</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loading ? (
+                <Skeleton className="h-48 w-full" />
+                ) : (
+                <div className="h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={statusChart}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#2563eb" />
+                    </BarChart>
+                    </ResponsiveContainer>
+                </div>
+                )}
+            </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                        <span>Thông báo & Tin tức</span>
+                        <Badge>Sắp ra mắt</Badge>
+                    </CardTitle>
+                    <CardDescription>Cập nhật mới nhất từ giảng viên và hệ thống</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col items-center justify-center h-48 text-center space-y-3">
+                    <div className="bg-gray-100 p-3 rounded-full">
+                        <AlertTriangle className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <p className="text-sm text-muted-foreground max-w-xs">
+                        Hệ thống thông báo đang được phát triển. Bạn sẽ sớm nhận được thông báo về deadline và yêu cầu nhóm tại đây.
+                    </p>
+                </CardContent>
+            </Card>
+        </div>
       </div>
     </DashboardLayout>
   )
