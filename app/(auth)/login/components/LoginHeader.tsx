@@ -13,7 +13,7 @@ export default function LoginHeader() {
           FPT University
         </CardTitle>
         <CardDescription className="text-base text-gray-600">
-          EXE102 Project Management System
+          EXE Groupping Management System
         </CardDescription>
       </div>
     </CardHeader>

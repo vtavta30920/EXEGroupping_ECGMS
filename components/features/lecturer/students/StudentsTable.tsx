@@ -114,7 +114,9 @@ export function StudentsTable({
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={`${getMajorBadgeColor(student.majorCode)} font-medium`}
+                      className={`${getMajorBadgeColor(
+                        student.majorCode
+                      )} font-medium`}
                     >
                       {student.majorCode}
                     </Badge>
@@ -122,7 +124,9 @@ export function StudentsTable({
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={`${getSkillBadgeColor(student.coreSkill)} font-medium px-2.5 py-1`}
+                      className={`${getSkillBadgeColor(
+                        student.coreSkill
+                      )} font-medium px-2.5 py-1`}
                     >
                       {student.coreSkill}
                     </Badge>
@@ -136,4 +140,3 @@ export function StudentsTable({
     </>
   );
 }
-
