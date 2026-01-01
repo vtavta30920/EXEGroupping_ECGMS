@@ -31,10 +31,10 @@ export default function StudentProfilePage() {
 
   return (
     <DashboardLayout role="student">
-      <div className="space-y-6 max-w-3xl mx-auto">
+      <div className="space-y-4 max-w-3xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Hồ sơ cá nhân</h1>
-          <p className="text-gray-600 mt-1">Thông tin hồ sơ cá nhân của bạn.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Hồ sơ cá nhân</h1>
+          <p className="text-sm text-gray-600">Thông tin hồ sơ cá nhân của bạn.</p>
         </div>
 
         <Card>
@@ -42,7 +42,7 @@ export default function StudentProfilePage() {
             profileName={profile?.fullName || user.fullName}
             email={user.email}
           />
-          <CardContent>
+          <CardContent className="pt-4">
             <ProfileReadView
               user={user}
               profile={profile}
