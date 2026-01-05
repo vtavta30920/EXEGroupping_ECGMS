@@ -66,60 +66,59 @@ export default function LoginForm() {
     <>
       <CardContent className="space-y-6">
         <form onSubmit={handleLogin} className="space-y-5">
-
-        {/* Email */}
-        <div className="space-y-2">
-          <Label>Email</Label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              type="text"
-              placeholder="Nhập email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="pl-10"
-              required
-              disabled={loading}
-            />
+          {/* Email */}
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                type="text"
+                placeholder="Nhập email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="pl-10"
+                required
+                disabled={loading}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Password */}
-        <div className="space-y-2">
-          <Label>Mật khẩu</Label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              type="password"
-              placeholder="Nhập mật khẩu"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="pl-10"
-              required
-              disabled={loading}
-            />
+          {/* Password */}
+          <div className="space-y-2">
+            <Label>Mật khẩu</Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                type="password"
+                placeholder="Nhập mật khẩu"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-10"
+                required
+                disabled={loading}
+              />
+            </div>
           </div>
-        </div>
 
-        <LoginAlert error={error} />
+          <LoginAlert error={error} />
 
-        {/* Button */}
-        <Button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-orange-500 hover:bg-orange-600 text-white h-11 shadow-md"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Đang đăng nhập...
-            </>
-          ) : (
-            "Đăng nhập"
-          )}
-        </Button>
-      </form>
-    </CardContent>
+          {/* Button */}
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white h-11 shadow-md"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Đang đăng nhập...
+              </>
+            ) : (
+              "Đăng nhập"
+            )}
+          </Button>
+        </form>
+      </CardContent>
     </>
   );
 }
