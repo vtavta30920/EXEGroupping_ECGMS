@@ -1,4 +1,4 @@
-// app/api/users/import/route.ts
+// app/api/users/import-lecturer/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 function getUserFriendlyError(status: number, backendMessage: string): string {
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     const backendUrl = process.env.BACKEND_URL || "http://140.245.42.78:5050";
-    const endpoint = "/api/User/import-students";
+    const endpoint = "/api/User/import-lecturer";
 
     const arrayBuffer = await file.arrayBuffer();
     const blob = new Blob([arrayBuffer], {
@@ -90,11 +90,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: parsed?.message || "Import students completed successfully",
+      message: parsed?.message || "Import lecturers completed successfully",
       data: parsed,
     });
   } catch (error: any) {
-    console.error("[Import Students Proxy Error]", error);
+    console.error("[Import Lecturers Proxy Error]", error);
     return NextResponse.json(
       { error: "Server error during import", message: error?.message },
       { status: 500 }

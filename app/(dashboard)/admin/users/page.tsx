@@ -124,10 +124,13 @@ export default function AdminDataManagementPage() {
     setIsLoadingLecturers(true);
     try {
       const timestamp = new Date().getTime();
-      const res = await fetch(`/api/proxy/User/Lecturer?pageSize=100&_t=${timestamp}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      });
+      const res = await fetch(
+        `/api/proxy/User/Lecturer?pageSize=100&_t=${timestamp}`,
+        {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        }
+      );
       if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
       const data = await res.json();
       // Handle paginated response: { items: [...] }
@@ -166,7 +169,7 @@ export default function AdminDataManagementPage() {
   }, [searchTerm, selectedMajor, selectedSkill]);
 
   // --- Handlers ---
-  const handleUpload = async (file: File, type: "student" | "lecturer") => {
+  const handleImport = async (file: File, type: "student" | "lecturer") => {
     const allowedExtensions = [".xlsx", ".xls", ".csv"];
     const isValid = allowedExtensions.some((ext) =>
       file.name.toLowerCase().endsWith(ext)
@@ -178,11 +181,15 @@ export default function AdminDataManagementPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("type", type);
 
+      // const endpoint =
+      //   type === "student"
+      //     ? "/api/users/import"
+      //     : "/api/proxy/User/import-lecturer";
       const endpoint =
-        type === "student"
-          ? "/api/users/import"
-          : "/api/proxy/User/import-lecturer";
+        type === "student" ? "/api/users/import" : "/api/users/import-lecturer";
+
       const res = await fetch(endpoint, {
         method: "POST",
         body: formData,
@@ -216,8 +223,8 @@ export default function AdminDataManagementPage() {
     }
   };
 
-  const handleImportStudents = (file: File) => handleUpload(file, "student");
-  const handleImportLecturers = (file: File) => handleUpload(file, "lecturer");
+  const handleImportStudents = (file: File) => handleImport(file, "student");
+  const handleImportLecturers = (file: File) => handleImport(file, "lecturer");
 
   // --- Helper Getters ---
   const getUsername = (s: Student) => s.username || "N/A";
