@@ -111,7 +111,7 @@ export default function FindGroupsPage() {
             courseCode: g.course?.courseCode || g.courseCode || selectedCourse,
             courseName: g.course?.courseName || g.courseName || "",
             memberCount,
-            maxMembers: g.maxMembers || 5,
+            maxMembers: g.maxMembers || 6,
             leaderId: g.leaderId || (g.leader?.id ?? ""),
             leaderName: g.leader?.fullName || g.leader?.fullname || "",
             status: (g.status ||
@@ -458,6 +458,18 @@ export default function FindGroupsPage() {
     );
   }
 
+  // Pagination state
+  const [page, setPage] = React.useState(1);
+  const pageSize = 12;
+  const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize;
+  const pagedGroups = groups.slice(start, end);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [selectedCourse, onlyEmpty, searchQuery, isLoading]);
+
   return (
     <DashboardLayout role="student">
       <div className="space-y-6">
@@ -542,8 +554,8 @@ export default function FindGroupsPage() {
 
             <TabsContent value="all" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {groups.length > 0 ? (
-                  groups.map((group) => (
+                {pagedGroups.length > 0 ? (
+                  pagedGroups.map((group) => (
                     <GroupCard
                       key={group.groupId}
                       group={group}
@@ -557,6 +569,29 @@ export default function FindGroupsPage() {
                     Chưa có nhóm nào được hiển thị.
                   </p>
                 )}
+              </div>
+              <div className="flex items-center justify-between border-t pt-4">
+                <div className="text-sm text-gray-600">
+                  Trang {page}/{totalPages}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Trước
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                  >
+                    Sau
+                  </Button>
+                </div>
               </div>
             </TabsContent>
 
