@@ -124,13 +124,15 @@ export default function AdminDataManagementPage() {
     setIsLoadingLecturers(true);
     try {
       const timestamp = new Date().getTime();
-      const res = await fetch(`/api/proxy/User/Lecturer?_t=${timestamp}`, {
+      const res = await fetch(`/api/proxy/User/Lecturer?pageSize=100&_t=${timestamp}`, {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" },
       });
       if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
       const data = await res.json();
-      const mapped = (Array.isArray(data) ? data : []).map((item: any) => ({
+      // Handle paginated response: { items: [...] }
+      const items = data.items || (Array.isArray(data) ? data : []);
+      const mapped = items.map((item: any) => ({
         id:
           item?.user?.id ||
           item?.userProfileViewModel?.userId ||

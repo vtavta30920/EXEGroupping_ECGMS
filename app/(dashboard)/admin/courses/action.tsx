@@ -19,11 +19,11 @@ export async function getCoursesServerSide(): Promise<Course[]> {
     const backendUrl = process.env.BACKEND_URL || 'http://140.245.42.78:5050';
 
     // Thêm timestamp để bust cache ở mọi tầng
-    const ts = Date.now();
-    console.log(`[Server Action] Fetching courses from: ${backendUrl}/api/Course/GetListCourses?_t=${ts}`);
+    // const ts = Date.now();
+    console.log(`[Server Action] Fetching courses from: ${backendUrl}/api/Course/GetListCourses`);
 
     // 3. Gọi API Backend (Server-to-Server fetch)
-    const res = await fetch(`${backendUrl}/api/Course/GetListCourses?PageNumber=1&PageSize=1000&_t=${ts}`, {
+    const res = await fetch(`${backendUrl}/api/Course/GetListCourses?PageNumber=1&PageSize=1000`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`, // Đính kèm token nếu cần
@@ -31,7 +31,7 @@ export async function getCoursesServerSide(): Promise<Course[]> {
         'Pragma': 'no-cache',
         'Expires': '0',
       },
-      cache: 'no-store', // Luôn lấy dữ liệu mới nhất
+      // cache: 'no-store', // Luôn lấy dữ liệu mới nhất
       next: { revalidate: 0 }
     });
 
