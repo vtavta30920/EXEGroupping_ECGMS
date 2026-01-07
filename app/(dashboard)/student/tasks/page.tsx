@@ -4,18 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GroupTaskService } from "@/lib/api/groupTaskService";
 import { TaskService } from "@/lib/api/taskService";
-import { mockTasks } from "@/lib/mock-data/tasks";
-import { getGroupMembers as getMockGroupMembers } from "@/lib/mock-data/groups";
 import { getCurrentUser } from "@/lib/utils/auth";
 import type { GroupMember, Task, TaskPriority, User } from "@/lib/types";
 
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import ChangeMockData from "@/components/features/ChangeMockData";
 import TaskStats from "@/components/features/tasks/TaskStats";
 import TaskList from "@/components/features/tasks/TaskList";
 import TaskKanban from "@/components/features/tasks/TaskKanban";
@@ -42,7 +38,6 @@ export default function StudentTasksPage() {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({});
   const [assigneeScope, setAssigneeScope] = useState<AssigneeScope>("me");
-  const [useMock, setUseMock] = useState<boolean>(true);
 
   // Create Task modal state
   const [createOpen, setCreateOpen] = useState(false);
@@ -73,30 +68,15 @@ export default function StudentTasksPage() {
     setLoading(true);
     setError(null);
     try {
-      if (useMock) {
-        let ts: Task[] = [];
-        if (assigneeScope === "me") {
-          ts = mockTasks.filter(t => t.assignedToId === studentId);
-        } else {
-          ts = mockTasks.filter(t => t.groupId === currentUser?.groupId);
+      let ts: Task[] = [];
+      // Fallback to group-level tasks since Student endpoint is not implemented
+      if (currentUser?.groupId) {
+        ts = await TaskService.getTasksByGroupId(currentUser.groupId);
+        if (assigneeScope === "me" && studentId) {
+          ts = ts.filter(t => t.assignedToId === studentId);
         }
-        const filtered = ts.filter(t => {
-          const byStatus = filters.status ? t.status === filters.status : true;
-          const byPriority = filters.priority ? t.priority === filters.priority : true;
-          return byStatus && byPriority;
-        });
-        setTasks(filtered);
-      } else {
-        let ts: Task[] = [];
-        // Fallback to group-level tasks since Student endpoint is not implemented
-        if (currentUser?.groupId) {
-          ts = await TaskService.getTasksByGroupId(currentUser.groupId);
-          if (assigneeScope === "me" && studentId) {
-            ts = ts.filter(t => t.assignedToId === studentId);
-          }
-        }
-        setTasks(ts);
       }
+      setTasks(ts);
     } catch (e: any) {
       setError(e?.message || "Không thể tải danh sách task");
     } finally {
@@ -107,69 +87,43 @@ export default function StudentTasksPage() {
   useEffect(() => {
     loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId, filters.status, filters.priority, assigneeScope, useMock]);
+  }, [studentId, filters.status, filters.priority, assigneeScope]);
 
   // Load group members for assignee dropdown
   useEffect(() => {
     async function loadMembers() {
       if (!currentUser?.groupId) { setMembers([]); return; }
       try {
-        if (useMock) {
-          const ms = await getMockGroupMembers(currentUser.groupId);
-          setMembers(ms);
-        } else {
-          const ms = await GeneratedGroupMemberService.getApiGroupMember({ groupId: currentUser.groupId });
-          const normalized = (ms || []).map(m => ({
-            userId: (m as any).userId || (m as any).studentId || (m as any).id || "",
-            fullName: (m as any).username || (m as any).studentName || (m as any).fullName || "Thành viên",
-            role: ((m as any).roleInGroup === 'Leader' || (m as any).roleInGroup === 'Group Leader') ? 'leader' : 'member',
-            major: 'SE',
-          })) as GroupMember[];
-          setMembers(normalized);
-        }
+        const ms = await GeneratedGroupMemberService.getApiGroupMember({ groupId: currentUser.groupId });
+        const normalized = (ms || []).map(m => ({
+          userId: (m as any).userId || (m as any).studentId || (m as any).id || "",
+          fullName: (m as any).username || (m as any).studentName || (m as any).fullName || "Thành viên",
+          role: ((m as any).roleInGroup === 'Leader' || (m as any).roleInGroup === 'Group Leader') ? 'leader' : 'member',
+          major: 'SE',
+        })) as GroupMember[];
+        setMembers(normalized);
       } catch {
         setMembers([]);
       }
     }
     loadMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.groupId, useMock]);
+  }, [currentUser?.groupId]);
 
   async function handleCreateTask() {
     if (!canCreate) return;
     if (!createForm.assigneeUserId) { alert("Vui lòng chọn người được giao"); return; }
     try {
       setLoading(true);
-      if (useMock) {
-        const newTask: Task = {
-          taskId: `M-${Date.now()}`,
-          taskName: createForm.taskName,
-          description: createForm.description,
-          groupId: currentUser!.groupId!,
-          groupName: currentUser?.groupId ? `Group ${currentUser.groupId}` : "Nhóm của tôi",
-          courseId: "",
-          courseCode: "",
-          checkpointId: "",
-          checkpointNumber: 0,
-          assignedTo: members.find(m => m.userId === createForm.assigneeUserId)?.fullName || "",
-          assignedToId: createForm.assigneeUserId,
-          status: "pending",
-          priority: createForm.priority,
-          dueDate: createForm.dueDate ? new Date(createForm.dueDate).toISOString() : new Date().toISOString(),
-          createdDate: new Date().toISOString(),
-        };
-        setTasks(prev => [newTask, ...prev]);
-      } else {
-        await GroupTaskService.createTask({
-          groupId: currentUser!.groupId!,
-          taskName: createForm.taskName,
-          description: createForm.description,
-          assigneeUserId: createForm.assigneeUserId,
-          dueDate: createForm.dueDate ? new Date(createForm.dueDate).toISOString() : undefined,
-          priority: createForm.priority,
-        });
-        await loadTasks();
-      }
+      await GroupTaskService.createTask({
+        groupId: currentUser!.groupId!,
+        taskName: createForm.taskName,
+        description: createForm.description,
+        assigneeUserId: createForm.assigneeUserId,
+        dueDate: createForm.dueDate ? new Date(createForm.dueDate).toISOString() : undefined,
+        priority: createForm.priority,
+      });
+      await loadTasks();
       setCreateOpen(false);
       setCreateForm({ taskName: "", description: "", dueDate: "", priority: "medium", assigneeUserId: "" });
     } catch (e: any) {
@@ -188,16 +142,12 @@ export default function StudentTasksPage() {
     if (!detailTask) return;
     try {
       setLoading(true);
-      if (useMock) {
-        setTasks(prev => prev.map(t => t.taskId === detailTask.taskId ? { ...t, status: payload.status } : t));
-      } else {
-        await GroupTaskService.updateTaskProgress(detailTask.taskId, {
-          status: payload.status,
-          progressPercent: payload.progressPercent,
-          remarks: payload.remarks,
-        });
-        await loadTasks();
-      }
+      await GroupTaskService.updateTaskProgress(detailTask.taskId, {
+        status: payload.status,
+        progressPercent: payload.progressPercent,
+        remarks: payload.remarks,
+      });
+      await loadTasks();
       setDetailOpen(false);
       setDetailTask(null);
     } catch (e: any) {
@@ -210,12 +160,8 @@ export default function StudentTasksPage() {
   async function handleMoveStatus(task: Task, nextStatus: Task["status"]) {
     try {
       setLoading(true);
-      if (useMock) {
-        setTasks(prev => prev.map(t => t.taskId === task.taskId ? { ...t, status: nextStatus } : t));
-      } else {
-        await GroupTaskService.updateTaskProgress(task.taskId, { status: nextStatus });
-        await loadTasks();
-      }
+      await GroupTaskService.updateTaskProgress(task.taskId, { status: nextStatus });
+      await loadTasks();
     } catch (e: any) {
       alert(e?.message || "Chuyển trạng thái thất bại");
     } finally {
@@ -284,8 +230,6 @@ export default function StudentTasksPage() {
                     <SelectItem value="high">Cao</SelectItem>
                   </SelectContent>
                 </Select>
-
-                <ChangeMockData loading={loading} onRefresh={loadTasks} useMock={useMock} setUseMock={setUseMock} />
 
                 <CreateTaskDialog
                   open={createOpen}
