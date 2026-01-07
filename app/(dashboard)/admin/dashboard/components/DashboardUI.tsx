@@ -12,10 +12,10 @@ export function DashboardUI({ data }: { data: DashboardData }) {
   return (
     <div className="space-y-6">
       <DashboardHeader />
+      <ActionsSection />
       <OverviewCards data={data} />
       <CourseProgressChart data={data} />
       <AttentionSection data={data} />
-      <ActionsSection />
     </div>
   )
 }
