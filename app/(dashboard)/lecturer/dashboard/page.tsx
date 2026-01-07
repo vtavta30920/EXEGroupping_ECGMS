@@ -44,6 +44,21 @@ export default function LecturerDashboard() {
   const [exportFormat, setExportFormat] = useState<"xlsx" | "csv">("xlsx");
   const { toast } = useToast();
 
+  // Tạo tên hiển thị thân thiện
+  const getDisplayName = (user: any): string => {
+    if (!user) return "Giảng viên";
+
+    // Ưu tiên fullName, nếu không có thì dùng "thầy/cô [username]"
+    const fullName = user.fullName?.trim();
+    const username = user.username?.trim();
+
+    if (fullName && fullName !== username && !fullName.includes("@")) {
+      return fullName;
+    }
+
+    return username ? `thầy/cô ${username}` : "Giảng viên";
+  };
+
   useEffect(() => {
     const currentUser = getCurrentUser();
     if (!currentUser || currentUser.role !== "lecturer") {
@@ -112,7 +127,7 @@ export default function LecturerDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              Chào mừng quay lại, {user.fullName || user.username}!
+              Chào mừng quay lại, {getDisplayName(user)}!
             </h1>
             <p className="text-gray-600 mt-1">
               Tổng quan về các khóa học và nhóm bạn đang phụ trách

@@ -1,109 +1,150 @@
 // Login form component
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useCurrentUser } from '@/lib/hooks/useCurrentUser'
-import { UserService } from '@/lib/api/generated/services/UserService'
-import { RoleService } from '@/lib/api/generated/services/RoleService'
-import { useRouter } from 'next/navigation'
-import { ApiError } from '@/lib/api/generated/core/ApiError'
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { UserService } from "@/lib/api/generated/services/UserService";
+import { RoleService } from "@/lib/api/generated/services/RoleService";
+import { useRouter } from "next/navigation";
+import { ApiError } from "@/lib/api/generated/core/ApiError";
 
-const STUDENT_ROLE_ID = '106c46d1-6ac9-413c-b883-ce67f2af6a01'
+const STUDENT_ROLE_ID = "106c46d1-6ac9-413c-b883-ce67f2af6a01";
 
 export function LoginForm() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const { user } = useCurrentUser()
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { user } = useCurrentUser();
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
       // Đăng nhập theo email bằng generated UserService (password để trống)
-      let rawUser: any = null
+      let rawUser: any = null;
       try {
-        const res = await fetch(`/api/proxy/api/User/email/${encodeURIComponent(email)}`, { cache: 'no-store', headers: { accept: 'text/plain' } })
+        const res = await fetch(
+          `/api/proxy/api/User/email/${encodeURIComponent(email)}`,
+          { cache: "no-store", headers: { accept: "text/plain" } }
+        );
         if (res.ok) {
-          rawUser = await res.json()
+          rawUser = await res.json();
         } else if (res.status < 500) {
-          rawUser = await UserService.getApiUserEmail({ email })
+          rawUser = await UserService.getApiUserEmail({ email });
         } else {
-          throw new Error('Máy chủ gặp sự cố, vui lòng thử lại sau')
+          throw new Error("Máy chủ gặp sự cố, vui lòng thử lại sau");
         }
       } catch (e: any) {
         try {
-          rawUser = await UserService.getApiUserEmail({ email })
+          rawUser = await UserService.getApiUserEmail({ email });
         } catch {
-          throw e
+          throw e;
         }
       }
       // Debug thực tế giá trị role
-      console.log('🔍 Raw User:', rawUser)
-      console.log('🔍 Role object:', rawUser?.role)
-      console.log('🔍 Role name raw:', rawUser?.role?.roleName)
-      console.log('🔍 RoleId:', rawUser?.roleId)
+      console.log("🔍 Raw User:", rawUser);
+      console.log("🔍 Role object:", rawUser?.role);
+      console.log("🔍 Role name raw:", rawUser?.role?.roleName);
+      console.log("🔍 RoleId:", rawUser?.roleId);
 
-      let roleName = (rawUser?.role?.roleName || '').toString().trim().toLowerCase()
-      console.log('🔍 Role name after lowercase:', roleName)
-      console.log('🔍 Is student by name?:', roleName === 'student')
+      let roleName = (rawUser?.role?.roleName || "")
+        .toString()
+        .trim()
+        .toLowerCase();
+      console.log("🔍 Role name after lowercase:", roleName);
+      console.log("🔍 Is student by name?:", roleName === "student");
       // Fallback: nếu role null, thử lấy từ RoleService bằng roleId
       if (!roleName && rawUser?.roleId) {
         try {
-          const roleVm = await RoleService.getApiRole1({ id: rawUser.roleId })
-          roleName = (roleVm?.roleName || '').toString().trim().toLowerCase()
+          const roleVm = await RoleService.getApiRole1({ id: rawUser.roleId });
+          roleName = (roleVm?.roleName || "").toString().trim().toLowerCase();
         } catch (e) {
           // bỏ qua nếu không lấy được role
         }
       }
-      const isStudentById = rawUser?.roleId === STUDENT_ROLE_ID
-      const isStudentByName = roleName === 'student'
-      const isStudent = isStudentById || isStudentByName
-      console.log('✅ isStudentById:', isStudentById, 'isStudentByName:', isStudentByName)
+      const isStudentById = rawUser?.roleId === STUDENT_ROLE_ID;
+      const isStudentByName = roleName === "student";
+      const isStudent = isStudentById || isStudentByName;
+      console.log(
+        "✅ isStudentById:",
+        isStudentById,
+        "isStudentByName:",
+        isStudentByName
+      );
       if (!isStudent) {
-        throw new Error('Chỉ sinh viên (Student) được phép đăng nhập')
+        throw new Error("Chỉ sinh viên (Student) được phép đăng nhập");
       }
 
       // 🔧 FIX: Validate userId must be GUID, not email
-      const rawUserId = rawUser?.id ?? '';
-      const guidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      const rawUserId = rawUser?.id ?? "";
+      const guidRegex =
+        /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-      console.log('🔍 [LoginForm] Raw user ID:', rawUserId);
-      console.log('🔍 [LoginForm] Is userId a GUID?', guidRegex.test(rawUserId));
+      console.log("🔍 [LoginForm] Raw user ID:", rawUserId);
+      console.log(
+        "🔍 [LoginForm] Is userId a GUID?",
+        guidRegex.test(rawUserId)
+      );
 
       if (!guidRegex.test(rawUserId)) {
-        console.warn('⚠️ [LoginForm] User ID from API is not a GUID:', rawUserId);
-        throw new Error('User ID từ server không đúng định dạng GUID. Vui lòng liên hệ admin.');
+        console.warn(
+          "⚠️ [LoginForm] User ID from API is not a GUID:",
+          rawUserId
+        );
+        throw new Error(
+          "User ID từ server không đúng định dạng GUID. Vui lòng liên hệ admin."
+        );
       }
 
       // Get latest group info from API
       let groupId = null;
       try {
-        console.log('🔍 [LoginForm] Fetching group info for userId:', rawUserId);
-        const GroupService = (await import('@/lib/api/groupService')).GroupService;
+        console.log(
+          "🔍 [LoginForm] Fetching group info for userId:",
+          rawUserId
+        );
+        const GroupService = (await import("@/lib/api/groupService"))
+          .GroupService;
         const groupData = await GroupService.getGroupByStudentId(rawUserId);
         groupId = groupData?.groupId || null;
-        console.log('✅ [LoginForm] Found groupId from API:', groupId);
+        console.log("✅ [LoginForm] Found groupId from API:", groupId);
       } catch (groupError) {
-        console.warn('⚠️ [LoginForm] Could not fetch group info:', groupError);
+        console.warn("⚠️ [LoginForm] Could not fetch group info:", groupError);
         // Fallback to existing data
-        const existingUserData = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const existingUserData = JSON.parse(
+          localStorage.getItem("currentUser") || "{}"
+        );
         groupId = existingUserData.groupId || null;
-        console.log('🔄 [LoginForm] Using fallback groupId from localStorage:', groupId);
+        console.log(
+          "🔄 [LoginForm] Using fallback groupId from localStorage:",
+          groupId
+        );
       }
 
       const normalized = {
         userId: rawUserId,
         username: rawUser?.username || rawUser?.email || email,
-        fullName: rawUser?.userProfile?.fullName || rawUser?.username || rawUser?.email || email,
+        fullName:
+          (rawUser?.userProfile?.fullName &&
+            rawUser.userProfile.fullName.trim()) ||
+          (rawUser?.fullName && rawUser.fullName.trim()) ||
+          (rawUser?.username && rawUser.username.trim()) ||
+          (rawUser?.email && rawUser.email.trim()) ||
+          email,
         email: rawUser?.email || email,
-        role: 'student',
+        role: "student",
         groupId: groupId,
         roleId: rawUser?.roleId,
         skillSet: (rawUser?.skillSet ?? undefined) as any,
@@ -111,41 +152,44 @@ export function LoginForm() {
         studentCourses: (rawUser?.studentCourses ?? undefined) as any[],
         groups: (rawUser?.groups ?? undefined) as any[],
         notifications: (rawUser?.notifications ?? undefined) as any[],
-      }
+      };
 
-      console.log('✅ [LoginForm] Final normalized user with groupId:', normalized.groupId);
+      console.log(
+        "✅ [LoginForm] Final normalized user with groupId:",
+        normalized.groupId
+      );
 
-      console.log('✅ [LoginForm] Normalized userId:', normalized.userId);
+      console.log("✅ [LoginForm] Normalized userId:", normalized.userId);
 
       try {
-        localStorage.setItem('currentUser', JSON.stringify(normalized))
+        localStorage.setItem("currentUser", JSON.stringify(normalized));
       } catch (e) {
-        console.warn('Failed to persist auth state', e)
+        console.warn("Failed to persist auth state", e);
       }
-      setError(null)
+      setError(null);
       // Redirect based on user role (đơn giản hóa về /dashboard)
-      router.push('/dashboard')
+      router.push("/dashboard");
     } catch (err) {
-      let msg = 'Lỗi đăng nhập'
+      let msg = "Lỗi đăng nhập";
       if (err instanceof ApiError) {
         if (err.status === 404) {
-          msg = 'Không tìm thấy tài khoản với email này'
+          msg = "Không tìm thấy tài khoản với email này";
         } else if (err.status === 401) {
-          msg = 'Bạn không có quyền đăng nhập'
+          msg = "Bạn không có quyền đăng nhập";
         } else if (err.status >= 500) {
-          msg = 'Máy chủ gặp sự cố, vui lòng thử lại sau'
+          msg = "Máy chủ gặp sự cố, vui lòng thử lại sau";
         } else {
-          msg = `${err.status} ${err.statusText}`
+          msg = `${err.status} ${err.statusText}`;
         }
       } else if (err instanceof Error) {
-        msg = err.message
+        msg = err.message;
       }
-      setError(msg)
-      console.error('Login failed:', err)
+      setError(msg);
+      console.error("Login failed:", err);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <Card className="w-full max-w-md mx-auto">
@@ -170,9 +214,12 @@ export function LoginForm() {
               required
             />
           </div>
-          
+
           <div>
-            <label htmlFor="password" className="block text-sm font-medium mb-1">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium mb-1"
+            >
               Mật khẩu
             </label>
             <Input
@@ -185,26 +232,20 @@ export function LoginForm() {
             />
           </div>
 
-          {error && (
-            <div className="text-red-600 text-sm">
-              {error}
-            </div>
-          )}
+          {error && <div className="text-red-600 text-sm">{error}</div>}
 
-          <Button 
-            type="submit" 
-            className="w-full" 
-            disabled={isLoading}
-          >
-            {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Đang đăng nhập..." : "Đăng nhập"}
           </Button>
         </form>
-        
+
         <div className="mt-4 text-sm text-gray-600">
           <p>Demo accounts:</p>
-          <div className="text-xs">Nhập email sinh viên (ví dụ: ...@fpt.edu.vn); mật khẩu để trống.</div>
+          <div className="text-xs">
+            Nhập email sinh viên (ví dụ: ...@fpt.edu.vn); mật khẩu để trống.
+          </div>
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

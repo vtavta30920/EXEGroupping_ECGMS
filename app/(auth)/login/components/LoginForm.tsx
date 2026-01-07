@@ -48,7 +48,12 @@ export default function LoginForm() {
       updateCurrentUser({
         userId: user.id || user.userId,
         username: user.username || email,
-        fullName: user.fullName || user.username || email,
+        fullName:
+          (user.userProfile?.fullName && user.userProfile.fullName.trim()) ||
+          (user.fullName && user.fullName.trim()) ||
+          (user.username && user.username.trim()) ||
+          (user.email && user.email.trim()) ||
+          email,
         email: user.email || email,
         role: role as "student" | "lecturer" | "admin",
         groupId: user.groupId || null,

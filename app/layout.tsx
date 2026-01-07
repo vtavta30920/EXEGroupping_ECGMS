@@ -4,13 +4,21 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster";
-import { ApiProvider } from "./providers/ApiProviders"
+import { ApiProvider } from "./providers/ApiProviders";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "ECGMS - Course Grouping Management",
   description: "Hệ thống quản lý phân nhóm môn học EXE",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon/icon.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/icon/icon.png",
+    shortcut: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -28,9 +36,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {/* ✅ Bọc ApiProvider ở ngoài cùng */}
-          <ApiProvider>
-            {children}
-          </ApiProvider>
+          <ApiProvider>{children}</ApiProvider>
           <Toaster />
         </ThemeProvider>
       </body>
