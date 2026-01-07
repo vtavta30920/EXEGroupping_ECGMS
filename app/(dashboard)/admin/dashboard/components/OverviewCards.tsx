@@ -49,20 +49,20 @@ export function OverviewCards({ data }: { data: DashboardData }) {
       {cards
         .filter((c) => !(c.label === "Nhóm trống" && c.value === 0))
         .map((c) => (
-        <Card key={c.label}>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">{c.label}</p>
-                <p className="text-3xl font-bold mt-2">{c.value}</p>
+          <Card key={c.label}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{c.label}</p>
+                  <p className="text-3xl font-bold mt-2">{c.value}</p>
+                </div>
+                <div className={`${c.color} p-3 rounded-lg`}>
+                  <c.icon className={`w-6 h-6 ${c.iconColor}`} />
+                </div>
               </div>
-              <div className={`${c.color} p-3 rounded-lg`}>
-                <c.icon className={`w-6 h-6 ${c.iconColor}`} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        ))}
     </div>
   );
 }

@@ -21,8 +21,6 @@ import { GroupService } from "@/lib/api/groupService";
 // Dùng gọi trực tiếp qua BFF Proxy cho endpoint GetAllGroups
 import type { Course } from "@/lib/types";
 import { CreateEmptyGroupsDialog } from "@/components/features/group/CreateEmptyGroupsDialog";
-import ChangeMockData from "@/components/features/ChangeMockData";
-import { getCourses as getCoursesMock } from "@/lib/mock-data/courses";
 // Đã bỏ ImportCard và logic XLSX tại đây; chuyển sang Dialog
 import {
   Table,
@@ -39,7 +37,7 @@ import { EditGroupDialog } from "@/components/features/group/EditGroupDialog";
 import { LecturerCourseService, UserService } from "@/lib/api/generated";
 import { GroupMemberService as GeneratedGroupMemberService } from "@/lib/api/generated/services/GroupMemberService";
 import { Badge } from "@/components/ui/badge";
-import { Shuffle } from "lucide-react";
+import { Shuffle, Trash2 } from "lucide-react";
 
 // Helper function to fix student userId (convert email to GUID if needed)
 async function fixStudentUserId(
@@ -101,9 +99,8 @@ export default function AdminGroupsPage() {
   const [groups, setGroups] = React.useState<any[]>([]);
   const [statusFilter, setStatusFilter] = React.useState<string>("all"); // all | full | empty
   const [mentorFilter, setMentorFilter] = React.useState<string>("all");
-  // Hydration-safe default: start with true on both server and client,
-  // then read persisted value after mount to avoid mismatch.
-  const [useMock, setUseMock] = React.useState<boolean>(true);
+  // Luôn dùng API cho Admin
+  const useMock = false;
   const [courseLecturerId, setCourseLecturerId] = React.useState<string>("");
   const [courseLecturerName, setCourseLecturerName] =
     React.useState<string>("—");
@@ -122,20 +119,9 @@ export default function AdminGroupsPage() {
   >({});
 
   React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem("useMock");
-      if (saved !== null) {
-        setUseMock(saved === "true");
-      }
-    } catch {}
-  }, []);
-
-  React.useEffect(() => {
     (async () => {
       try {
-        const list = useMock
-          ? await getCoursesMock()
-          : await CourseService.getCourses();
+        const list = await CourseService.getCourses();
         // Chỉ ẩn các course Inactive; mặc định coi thiếu status là Active
         const activeCourses = (list || []).filter(
           (c) => String(c.status || "active").toLowerCase() !== "inactive"
@@ -172,41 +158,35 @@ export default function AdminGroupsPage() {
         });
       }
     })();
-  }, [useMock]);
+  }, []);
 
   const loadEmptyCount = async (courseCode: string) => {
     if (!courseCode) return;
     setLoadingCount(true);
     setEmptyCount(null);
     try {
-      let countEmpty = 0;
-      if (useMock) {
-        const list = mockGroups.filter((g) => g.courseCode === courseCode);
-        countEmpty = list.filter((g) => (g.memberCount ?? 0) === 0).length;
-      } else {
-        const res = await fetch(
-          `/api/proxy/Group/GetGroupByCourseCode/count/${encodeURIComponent(
-            courseCode
-          )}`,
-          {
-            cache: "no-store",
-            next: { revalidate: 0 },
-            headers: {
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-              Expires: "0",
-            },
-          }
-        );
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          throw new Error(
-            `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`
-          );
+      const res = await fetch(
+        `/api/proxy/Group/GetGroupByCourseCode/count/${encodeURIComponent(
+          courseCode
+        )}`,
+        {
+          cache: "no-store",
+          next: { revalidate: 0 },
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
         }
-        const groups = await res.json();
-        countEmpty = groups.length;
+      );
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`
+        );
       }
+      const groups = await res.json();
+      const countEmpty = groups.length;
       setEmptyCount(countEmpty);
       // Loại bỏ thông báo khi không có nhóm trống
     } catch (err) {
@@ -242,43 +222,35 @@ export default function AdminGroupsPage() {
           setCourseLecturerName("—");
           return;
         }
-        if (useMock) {
-          const cid =
-            courses.find((c) => c.courseId === courseId)?.lecturerId || "";
-          setCourseLecturerId(cid);
-          const u = mockUsers.find((u) => u.userId === cid);
-          setCourseLecturerName(u?.fullName || "—");
-        } else {
-          const mapping =
-            await LecturerCourseService.getApiLecturerCourseByCourses({
-              coursesId: courseId,
-            });
-          let lecturerId = "";
-          if (Array.isArray(mapping) && mapping.length > 0)
-            lecturerId = mapping[0]?.lecturerId || "";
-          else if (mapping && typeof mapping === "object")
-            lecturerId = (mapping as any)?.lecturerId || "";
-          setCourseLecturerId(lecturerId);
-          let name = "—";
-          if (lecturerId) {
-            try {
-              const user = await UserService.getApiUser1({ id: lecturerId });
-              name =
-                user?.userProfile?.fullName ||
-                user?.username ||
-                user?.email ||
-                "—";
-            } catch {}
-          }
-          setCourseLecturerName(name);
+        const mapping =
+          await LecturerCourseService.getApiLecturerCourseByCourses({
+            coursesId: courseId,
+          });
+        let lecturerId = "";
+        if (Array.isArray(mapping) && mapping.length > 0)
+          lecturerId = mapping[0]?.lecturerId || "";
+        else if (mapping && typeof mapping === "object")
+          lecturerId = (mapping as any)?.lecturerId || "";
+        setCourseLecturerId(lecturerId);
+        let name = "—";
+        if (lecturerId) {
+          try {
+            const user = await UserService.getApiUser1({ id: lecturerId });
+            name =
+              user?.userProfile?.fullName ||
+              user?.username ||
+              user?.email ||
+              "—";
+          } catch {}
         }
+        setCourseLecturerName(name);
       } catch (err) {
         console.warn("Load course lecturer failed", err);
         setCourseLecturerId("");
         setCourseLecturerName("—");
       }
     },
-    [useMock, courses]
+    [courses]
   );
 
   // Map API group to table row
@@ -346,85 +318,41 @@ export default function AdminGroupsPage() {
       try {
         let rows: any[] = [];
 
-        if (useMock) {
-          const list = mockGroups.filter((g) => g.courseCode === courseCode);
-          rows = list.map((g) => {
-            const members = Array.isArray(g.members) ? g.members : [];
-            const memberCount = g.memberCount ?? members.length;
-
-            const currentCourse = courses.find(
-              (c) => c.courseCode === courseCode
-            );
-            const maxMembers = currentCourse?.maxMembers || g.maxMembers || 5;
-
-            const leader = members.find((m: any) => {
-              const role = (m.role || "").toLowerCase();
-              return role === "leader" || m.isLeader === true;
-            });
-
-            const hasLeader = !!leader;
-            const summary = `${hasLeader ? "1 Leader" : "0 Leader"} • ${
-              hasLeader ? Math.max(memberCount - 1, 0) : memberCount
-            } Members`;
-            const isValid = hasLeader && memberCount === maxMembers;
-
-            return {
-              id: g.groupId,
-              name: g.groupName,
-              courseCode: g.courseCode,
-              memberCount,
-              maxMembers,
-              lecturerName: courseLecturerName || "—",
-              status:
-                g.status ||
-                (memberCount >= maxMembers
-                  ? "finalize"
-                  : memberCount === 0
-                  ? "open"
-                  : "open"),
-              members,
-              hasLeader,
-              summary,
-              isValid,
-            };
-          });
-        } else {
-          try {
-            const res = await fetch(
-              `/api/proxy/Group/GetGroupByCourseCode/${encodeURIComponent(
-                courseCode
-              )}`,
-              {
-                cache: "no-store",
-                next: { revalidate: 0 },
-                headers: {
-                  "Cache-Control": "no-cache, no-store, must-revalidate",
-                  Pragma: "no-cache",
-                  Expires: "0",
-                },
-              }
-            );
-
-            if (!res.ok) {
-              const text = await res.text().catch(() => "");
-              throw new Error(
-                `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`
-              );
+        try {
+          const res = await fetch(
+            `/api/proxy/Group/GetGroupByCourseCode/${encodeURIComponent(
+              courseCode
+            )}`,
+            {
+              cache: "no-store",
+              next: { revalidate: 0 },
+              headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+                Expires: "0",
+              },
             }
+          );
 
-            const groupsRaw = await res.json();
-            rows = groupsRaw.map(mapApiGroupToRow);
-          } catch (err) {
-            const all = await GeneratedGroupService.getApiGroup();
-            const list = Array.isArray(all)
-              ? all.filter(
-                  (g: any) =>
-                    (g?.course?.courseCode || g?.courseCode) === courseCode
-                )
-              : [];
-
-            rows = list.map(mapApiGroupToRow);
+          if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            throw new Error(
+              `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`
+            );
           }
+
+          const groupsRaw = await res.json();
+          rows = groupsRaw.map(mapApiGroupToRow);
+        } catch (err) {
+          const all = await GeneratedGroupService.getApiGroup();
+          const list = Array.isArray(all)
+            ? all.filter(
+                (g: any) =>
+                  (g?.course?.courseCode || g?.courseCode) === courseCode
+              )
+            : [];
+
+          rows = list.map(mapApiGroupToRow);
         }
 
         setGroups(rows);
@@ -433,7 +361,7 @@ export default function AdminGroupsPage() {
         toast({ title: "Lỗi", description: "Không thể tải danh sách nhóm." });
       }
     },
-    [mapApiGroupToRow, toast, useMock, courses, courseLecturerName]
+    [mapApiGroupToRow, toast, courses, courseLecturerName]
   );
 
   React.useEffect(() => {
@@ -541,12 +469,6 @@ export default function AdminGroupsPage() {
             </p>
           </div>
         </div>
-        <ChangeMockData
-          loading={loadingCount}
-          onRefresh={refreshEmptyCount}
-          useMock={useMock}
-          setUseMock={setUseMock}
-        />
         <Card>
           <CardHeader>
             <CardTitle>Quản lý nhóm</CardTitle>
@@ -689,19 +611,6 @@ export default function AdminGroupsPage() {
               <span>
                 Nhóm trống: {groups.filter((g) => g.memberCount === 0).length}
               </span>
-              {selectedCourseId && (
-                <span className="text-gray-600">
-                  {loadingCount
-                    ? "Đang kiểm tra nhóm trống..."
-                    : emptyCount === null
-                    ? "Chưa kiểm tra"
-                    : emptyCount === 0
-                    ? groups.length === 0
-                      ? "Chưa khởi tạo nhóm."
-                      : "Tất cả các nhóm đều đã có thành viên hoạt động."
-                    : `Khoá ${selectedCourseCode} đang có ${emptyCount} nhóm trống.`}
-                </span>
-              )}
             </div>
 
             {/* Bảng nhóm */}
@@ -783,21 +692,28 @@ export default function AdminGroupsPage() {
                                 g.memberCount === courseMaxMembers);
                             const missingLeader =
                               g.memberCount > 0 && !g.hasLeader;
+                            const isEmpty = g.memberCount === 0;
                             if (valid)
                               return (
                                 <Badge className="bg-green-100 text-green-700">
-                                  Valid
+                                  Hợp lệ
                                 </Badge>
                               );
                             if (missingLeader)
                               return (
                                 <Badge className="bg-red-100 text-red-700">
-                                  Missing Leader
+                                  Thiếu Leader
+                                </Badge>
+                              );
+                            if (isEmpty)
+                              return (
+                                <Badge className="bg-gray-100 text-gray-700">
+                                  Trống
                                 </Badge>
                               );
                             return (
                               <Badge className="bg-yellow-100 text-yellow-700">
-                                Open
+                                Đang mở
                               </Badge>
                             );
                           })()}
@@ -873,18 +789,9 @@ export default function AdminGroupsPage() {
           groupName={editTarget?.name || ""}
           courseId={editTarget?.courseId || selectedCourseId}
           courseCode={selectedCourseCode}
-          useMock={useMock}
+          useMock={false}
           onSuccess={(newLecturerId) => {
             setEditOpen(false);
-            if (useMock) {
-              setCourses((prev) =>
-                prev.map((c) =>
-                  c.courseId === selectedCourseId
-                    ? { ...c, lecturerId: newLecturerId }
-                    : c
-                )
-              );
-            }
             loadCourseLecturer(selectedCourseId, selectedCourseCode);
             if (selectedCourseCode) {
               loadGroups(selectedCourseCode);
