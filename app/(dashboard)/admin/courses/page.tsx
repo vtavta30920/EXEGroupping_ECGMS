@@ -45,8 +45,7 @@ import { CourseService } from "@/lib/api/courseService"
 import { GroupService } from "@/lib/api/groupService"
 import type { Course } from "@/lib/types"
 import { getCoursesServerSide } from '@/app/(dashboard)/admin/courses/action';
-import ChangeMockData from "@/components/features/ChangeMockData";
-import { getCourses as getCoursesMock } from "@/lib/mock-data/courses";
+
 
 export default function AdminCoursesPage() {
   const [courses, setCourses] = React.useState<Course[]>([]);
@@ -59,11 +58,7 @@ export default function AdminCoursesPage() {
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
   const [impact, setImpact] = React.useState<{ groups: number; students: number } | null>(null);
   const [impactLoading, setImpactLoading] = React.useState(false);
-  const [useMock, setUseMock] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    const saved = localStorage.getItem('useMock');
-    return saved ? saved === 'true' : true;
-  });
+  // Luôn dùng API cho Admin
   
   // State for Assign Lecturer Dialog
   const [assignLecturerCourse, setAssignLecturerCourse] = React.useState<Course | null>(null);
@@ -72,7 +67,7 @@ export default function AdminCoursesPage() {
   async function fetchCourses() {
     setIsLoading(true);
     try {
-      const data = useMock ? await getCoursesMock() : await getCoursesServerSide();
+      const data = await getCoursesServerSide();
       setCourses(data);
     } catch (error) {
       console.error("Failed to fetch courses:", error);
@@ -84,7 +79,7 @@ export default function AdminCoursesPage() {
   React.useEffect(() => {
     fetchCourses();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useMock]);
+  }, []);
 
   const handleEditCourse = (course: Course) => {
     setEditingCourse(course);
@@ -186,7 +181,6 @@ export default function AdminCoursesPage() {
           </Button>
           </div>
         </div>
-       <ChangeMockData loading={isLoading} onRefresh={fetchCourses} useMock={useMock} setUseMock={setUseMock} />
        <Card>
            <CardHeader>
              <CardTitle>Course List ({courses.length})</CardTitle>

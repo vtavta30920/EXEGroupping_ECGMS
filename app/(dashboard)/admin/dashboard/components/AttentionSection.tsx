@@ -12,6 +12,11 @@ export function AttentionSection({ data }: { data: DashboardData }) {
   const lowMemberGroups = data?.warnings?.groupsMissingMembers ?? []
   const coursesNoMentor = data?.warnings?.coursesNoMentor ?? []
 
+  // Ẩn toàn bộ mục nếu không có cảnh báo nào
+  if ((lowMemberGroups?.length ?? 0) === 0 && (coursesNoMentor?.length ?? 0) === 0) {
+    return null
+  }
+
   return (
     <Card>
       <CardHeader>
