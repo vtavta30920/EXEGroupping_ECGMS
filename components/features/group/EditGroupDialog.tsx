@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { mockUsers } from "@/lib/mock-data/auth"
 import { LecturerCourseService, UserService } from "@/lib/api/generated"
 import { GroupService } from "@/lib/api/groupService"
 
@@ -17,12 +16,11 @@ type Props = {
   groupName: string
   courseId: string
   courseCode: string
-  useMock: boolean
   onSuccess?: (newLecturerId: string) => void
   initialLecturerId?: string
 }
 
-export function EditGroupDialog({ isOpen, onClose, groupId, groupName, courseId, courseCode, useMock, onSuccess, initialLecturerId }: Props) {
+export function EditGroupDialog({ isOpen, onClose, groupId, groupName, courseId, courseCode, onSuccess, initialLecturerId }: Props) {
   const { toast } = useToast()
   const [lecturers, setLecturers] = React.useState<{ id: string; name: string }[]>([])
   const [selectedLecturerId, setSelectedLecturerId] = React.useState<string>("")
@@ -34,15 +32,9 @@ export function EditGroupDialog({ isOpen, onClose, groupId, groupName, courseId,
       setSelectedLecturerId("")
       return
     }
-    console.log('🔄 [EditGroupDialog] useEffect triggered:', { isOpen, useMock, courseId, groupId, groupName });
+    console.log('🔄 [EditGroupDialog] useEffect triggered:', { isOpen, courseId, groupId, groupName });
     ;(async () => {
       try {
-        if (useMock) {
-          console.log('📚 [EditGroupDialog] Using mock lecturers');
-          const list = mockUsers.filter(u => u.role === 'lecturer').map(u => ({ id: u.userId, name: u.fullName }))
-          console.log('✅ [EditGroupDialog] Mock lecturers loaded:', list);
-          setLecturers(list)
-        } else {
           // Load lecturers by course using the new method
           if (courseId) {
               console.log('📡 [EditGroupDialog] Loading lecturers for courseId:', courseId);
@@ -111,7 +103,6 @@ export function EditGroupDialog({ isOpen, onClose, groupId, groupName, courseId,
               setSelectedLecturerId(initialLecturerId)
             }
           }
-        }
       } catch (err) {
         console.error('❌ [EditGroupDialog] Failed to load lecturers:', err)
         console.error('   Error stack:', (err as any)?.stack);
@@ -119,7 +110,7 @@ export function EditGroupDialog({ isOpen, onClose, groupId, groupName, courseId,
         toast({ title: "Lỗi", description: "Không thể tải danh sách giảng viên." })
       }
     })()
-  }, [isOpen, useMock, courseId, toast])
+  }, [isOpen, courseId, toast])
 
   // Log changes to lecturers state for debugging
   React.useEffect(() => {
@@ -134,11 +125,6 @@ export function EditGroupDialog({ isOpen, onClose, groupId, groupName, courseId,
     console.log('💾 [EditGroupDialog] handleSave called:', { groupId, selectedLecturerId, groupName })
     setSubmitting(true)
     try {
-      if (useMock) {
-        onSuccess?.(selectedLecturerId)
-        toast({ title: "Đã cập nhật", description: `Đã gán giảng viên cho nhóm ${groupName}.` })
-        onClose()
-      } else {
         // Update group lecturer using the new API
         console.log('🔄 [EditGroupDialog] Calling updateGroupLecturer with:', { groupId, lecturerId: selectedLecturerId })
         await GroupService.updateGroupLecturer(groupId, selectedLecturerId)
@@ -146,7 +132,6 @@ export function EditGroupDialog({ isOpen, onClose, groupId, groupName, courseId,
         onSuccess?.(selectedLecturerId)
         toast({ title: "Đã cập nhật", description: `Đã gán giảng viên cho nhóm ${groupName}.` })
         onClose()
-      }
     } catch (err: any) {
       console.error('Failed to update group lecturer:', err)
       console.error('   Details:', { groupId, selectedLecturerId, errorMessage: err?.message })
