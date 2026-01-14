@@ -29,20 +29,6 @@ export function ActionsSection() {
         <ClipboardList className="w-4 h-4" />
         Duyệt đề tài
       </Button>
-
-      <Button
-        variant="secondary"
-        className="gap-2"
-        onClick={() =>
-          toast({
-            title: "Phân bổ tự động",
-            description: "Chức năng đang phát triển",
-          })
-        }
-      >
-        <Shuffle className="w-4 h-4" />
-        Phân bổ tự động
-      </Button>
     </div>
   );
 }

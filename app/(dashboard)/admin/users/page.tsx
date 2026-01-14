@@ -34,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import ChangeMockData from "@/components/features/ChangeMockData";
 
 // --- Interface Definitions ---
 interface Student {
@@ -75,11 +74,6 @@ export default function AdminDataManagementPage() {
   const [isLoadingStudents, setIsLoadingStudents] = React.useState(true);
   const [isLoadingLecturers, setIsLoadingLecturers] = React.useState(false);
   const [lastFetchTime, setLastFetchTime] = React.useState<Date | null>(null);
-  const [useMock, setUseMock] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    const saved = localStorage.getItem("useMock");
-    return saved ? saved === "true" : true;
-  });
 
   // Filter & Pagination State
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -369,15 +363,7 @@ export default function AdminDataManagementPage() {
           <h1 className="text-3xl font-bold text-gray-900">Data Management</h1>
           <p className="text-gray-600 mt-1">Import and manage users.</p>
         </div>
-        <div className="flex items-center justify-between">
-          <ChangeMockData
-            loading={
-              viewMode === "student" ? isLoadingStudents : isLoadingLecturers
-            }
-            onRefresh={viewMode === "student" ? fetchStudents : fetchLecturers}
-            useMock={useMock}
-            setUseMock={setUseMock}
-          />
+        <div className="flex items-center justify-end">
           <div className="flex items-center gap-2">
             <Button
               variant="outline"

@@ -30,9 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { mockUsers } from "@/lib/mock-data/auth";
 import { getUserIdFromJWT } from "@/lib/utils/auth";
-import { mockGroups } from "@/lib/mock-data/groups";
 import { EditGroupDialog } from "@/components/features/group/EditGroupDialog";
 import { LecturerCourseService, UserService } from "@/lib/api/generated";
 import { GroupMemberService as GeneratedGroupMemberService } from "@/lib/api/generated/services/GroupMemberService";
@@ -593,11 +591,17 @@ export default function AdminGroupsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tất cả</SelectItem>
-                    {mockUsers
-                      .filter((u) => u.role === "lecturer")
-                      .map((u) => (
-                        <SelectItem key={u.userId} value={u.userId}>
-                          {u.fullName}
+                    {Array.from(
+                      new Set(
+                        groups
+                          .map((g) => g.lecturerId)
+                          .filter((id: string | undefined) => !!id)
+                      )
+                    )
+                      .map((id) => String(id))
+                      .map((id) => (
+                        <SelectItem key={id} value={id}>
+                          {lecturerNames[id] || "—"}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -638,10 +642,10 @@ export default function AdminGroupsPage() {
                         ? g.memberCount >= courseMaxMembers
                         : g.memberCount === 0;
                     })
-                    .filter(() =>
+                    .filter((g) =>
                       mentorFilter === "all"
                         ? true
-                        : courseLecturerId === mentorFilter
+                        : g.lecturerId === mentorFilter
                     )
                     .map((g) => (
                       <TableRow key={g.id}>
@@ -789,7 +793,6 @@ export default function AdminGroupsPage() {
           groupName={editTarget?.name || ""}
           courseId={editTarget?.courseId || selectedCourseId}
           courseCode={selectedCourseCode}
-          useMock={false}
           onSuccess={(newLecturerId) => {
             setEditOpen(false);
             loadCourseLecturer(selectedCourseId, selectedCourseCode);
