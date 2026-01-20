@@ -59,7 +59,7 @@ export default function LoginForm() {
         groupId: user.groupId || null,
       });
 
-      router.push(`/${role}/dashboard`);
+      router.push(`/${role}/dashboard`); 
     } catch (err: any) {
       setError(err.message || "Lỗi đăng nhập");
     } finally {

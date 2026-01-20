@@ -4,20 +4,15 @@ import type { DashboardData } from "@/lib/types/dashboard";
 
 export function useDashboard() {
   const { data, error, isLoading, mutate } = useSWR<DashboardData>(
-    "/api/dashboard/admin",
+    "/api/proxy/Dashboard/admin",
     getDashboardData,
     {
-      dedupingInterval: 15000,      // giảm call API
+      dedupingInterval: 15000,
       revalidateOnFocus: false,
-      shouldRetryOnError: true,
-      errorRetryCount: 3,
+      shouldRetryOnError: false,
+      errorRetryCount: 0,
     }
   );
 
-  return {
-    data,
-    error,
-    loading: isLoading,
-    refresh: mutate,
-  };
+  return { data, error, loading: isLoading, refresh: mutate };
 }
