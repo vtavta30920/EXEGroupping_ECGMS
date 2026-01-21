@@ -34,20 +34,23 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
   // Function to check group membership from API
   const checkGroupMembership = async (currentUser: any) => {
-    if (!currentUser || currentUser.role !== 'student') {
+    if (!currentUser || currentUser.role !== "student") {
       setUserGroupId(null);
       return;
     }
 
     try {
-      const { GroupService } = await import('@/lib/api/groupService');
-      
+      const { GroupService } = await import("@/lib/api/groupService");
+
       // Use userId from currentUser (stored in localStorage)
       let uid = currentUser.userId;
       console.log("🔍 [Sidebar] Checking group membership for uid:", uid);
-      
-      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uid);
-      
+
+      const isGuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          uid
+        );
+
       if (!isGuid) {
         console.warn("⚠️ [Sidebar] uid is not a valid GUID:", uid);
         setUserGroupId(null);
@@ -57,24 +60,32 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
       // Use GroupService.getGroupByStudentId which is more reliable
       const group = await GroupService.getGroupByStudentId(uid);
       console.log("📋 [Sidebar] GroupService response:", group);
-      console.log("📋 [Sidebar] Response type:", typeof group, "Is array:", Array.isArray(group));
-      
+      console.log(
+        "📋 [Sidebar] Response type:",
+        typeof group,
+        "Is array:",
+        Array.isArray(group)
+      );
+
       // Handle both single group object and array response
       let groupData = null;
       if (Array.isArray(group) && group.length > 0) {
         groupData = group[0];
-        console.log("📋 [Sidebar] Got array response, using first item:", groupData);
-      } else if (group && typeof group === 'object' && group.groupId) {
+        console.log(
+          "📋 [Sidebar] Got array response, using first item:",
+          groupData
+        );
+      } else if (group && typeof group === "object" && group.groupId) {
         groupData = group;
         console.log("📋 [Sidebar] Got object response:", groupData);
       }
-      
+
       if (groupData && groupData.groupId) {
         setUserGroupId(groupData.groupId);
         console.log("✅ [Sidebar] Found group from API:", groupData.groupId);
         return;
       }
-      
+
       console.log("ℹ️ [Sidebar] No group found for user");
       setUserGroupId(null);
     } catch (err) {
@@ -92,13 +103,16 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
     // Listen for user state changes
     const handleUserStateChange = () => {
       const updatedUser = getCurrentUser();
-      console.log("📡 [Sidebar] User state changed, re-checking group membership");
+      console.log(
+        "📡 [Sidebar] User state changed, re-checking group membership"
+      );
       setUser(updatedUser);
       checkGroupMembership(updatedUser);
     };
 
-    window.addEventListener('userStateChanged', handleUserStateChange);
-    return () => window.removeEventListener('userStateChanged', handleUserStateChange);
+    window.addEventListener("userStateChanged", handleUserStateChange);
+    return () =>
+      window.removeEventListener("userStateChanged", handleUserStateChange);
   }, []);
 
   const handleLogout = () => {
@@ -123,16 +137,15 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
     {
       name: userGroupId ? "Vào Không Gian Làm Việc" : "My Group",
       href: userGroupId ? `/student/groups/${userGroupId}` : "/student/group",
-      icon: Users
+      icon: Users,
     },
     { name: "My Tasks", href: "/student/tasks", icon: ClipboardList },
     { name: "Profile", href: "/student/profile", icon: UserIcon },
   ];
 
-
   const adminNavItems = [
     { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-    { name: "Users", href: "/admin/users", icon: Users },
+    { name: "Import", href: "/admin/users", icon: Users },
     { name: "Courses", href: "/admin/courses", icon: BookOpen },
     { name: "Groups", href: "/admin/groups", icon: Users },
   ];
@@ -194,7 +207,6 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
                 <span className="font-medium">{item.name}</span>
               </button>
             ))}
-
           </nav>
 
           {/* Logout */}
