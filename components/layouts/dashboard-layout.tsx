@@ -48,7 +48,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
       const isGuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-          uid
+          uid,
         );
 
       if (!isGuid) {
@@ -64,7 +64,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
         "📋 [Sidebar] Response type:",
         typeof group,
         "Is array:",
-        Array.isArray(group)
+        Array.isArray(group),
       );
 
       // Handle both single group object and array response
@@ -73,7 +73,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
         groupData = group[0];
         console.log(
           "📋 [Sidebar] Got array response, using first item:",
-          groupData
+          groupData,
         );
       } else if (group && typeof group === "object" && group.groupId) {
         groupData = group;
@@ -104,7 +104,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
     const handleUserStateChange = () => {
       const updatedUser = getCurrentUser();
       console.log(
-        "📡 [Sidebar] User state changed, re-checking group membership"
+        "📡 [Sidebar] User state changed, re-checking group membership",
       );
       setUser(updatedUser);
       checkGroupMembership(updatedUser);
@@ -128,7 +128,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
       href: "/lecturer/students-without-group",
       icon: UserX,
     },
-    { name: "Tasks", href: "/lecturer/tasks", icon: ClipboardList },
+    // { name: "Tasks", href: "/lecturer/tasks", icon: ClipboardList },
     { name: "Grades", href: "/lecturer/grades", icon: Award },
   ];
 
@@ -154,8 +154,8 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
     role === "lecturer"
       ? lecturerNavItems
       : role === "student"
-      ? studentNavItems
-      : adminNavItems;
+        ? studentNavItems
+        : adminNavItems;
 
   return (
     <div className="min-h-screen bg-gray-50">

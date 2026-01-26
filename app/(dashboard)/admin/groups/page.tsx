@@ -40,7 +40,7 @@ import { Shuffle, Trash2 } from "lucide-react";
 // Helper function to fix student userId (convert email to GUID if needed)
 async function fixStudentUserId(
   rawUid: any,
-  email?: string
+  email?: string,
 ): Promise<string | null> {
   if (!rawUid) return null;
 
@@ -62,7 +62,7 @@ async function fixStudentUserId(
         {
           cache: "no-store",
           headers: { accept: "text/plain" },
-        }
+        },
       );
       if (res.ok) {
         const userData = await res.json();
@@ -74,7 +74,7 @@ async function fixStudentUserId(
     } catch (error) {
       console.warn(
         `❌ [fixStudentUserId] Failed to convert email to GUID:`,
-        error
+        error,
       );
     }
   }
@@ -122,7 +122,7 @@ export default function AdminGroupsPage() {
         const list = await CourseService.getCourses();
         // Chỉ ẩn các course Inactive; mặc định coi thiếu status là Active
         const activeCourses = (list || []).filter(
-          (c) => String(c.status || "active").toLowerCase() !== "inactive"
+          (c) => String(c.status || "active").toLowerCase() !== "inactive",
         );
         setCourses(activeCourses);
         // Reset lựa chọn khi danh sách thay đổi
@@ -133,7 +133,7 @@ export default function AdminGroupsPage() {
             activeCourses.map((c) => ({
               courseCode: c.courseCode,
               maxMembers: c.maxMembers,
-            }))
+            })),
           );
           setSelectedCourseId(first.courseId);
           setSelectedCourseCode(first.courseCode);
@@ -165,7 +165,7 @@ export default function AdminGroupsPage() {
     try {
       const res = await fetch(
         `/api/proxy/Group/GetGroupByCourseCode/count/${encodeURIComponent(
-          courseCode
+          courseCode,
         )}`,
         {
           cache: "no-store",
@@ -175,12 +175,12 @@ export default function AdminGroupsPage() {
             Pragma: "no-cache",
             Expires: "0",
           },
-        }
+        },
       );
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         throw new Error(
-          `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`
+          `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`,
         );
       }
       const groups = await res.json();
@@ -248,7 +248,7 @@ export default function AdminGroupsPage() {
         setCourseLecturerName("—");
       }
     },
-    [courses]
+    [courses],
   );
 
   // Map API group to table row
@@ -257,12 +257,12 @@ export default function AdminGroupsPage() {
       const members = Array.isArray(g.groupMembers)
         ? g.groupMembers
         : Array.isArray(g.members)
-        ? g.members
-        : [];
+          ? g.members
+          : [];
       const memberCount = (g.countMembers ?? 0) || members.length;
       // Lấy maxMembers từ course hiện tại thay vì từ group
       const currentCourse = courses.find(
-        (c) => c.courseCode === (g.course?.courseCode || g.courseCode || "")
+        (c) => c.courseCode === (g.course?.courseCode || g.courseCode || ""),
       );
       const maxMembers = currentCourse?.maxMembers || g.maxMembers || 5;
       const status =
@@ -270,8 +270,8 @@ export default function AdminGroupsPage() {
         (memberCount >= maxMembers
           ? "finalize"
           : memberCount === 0
-          ? "open"
-          : "open");
+            ? "open"
+            : "open");
       const lecturerId =
         g.lectureId ||
         g.lecturerId ||
@@ -305,7 +305,7 @@ export default function AdminGroupsPage() {
         isValid,
       };
     },
-    [courseLecturerName, courses]
+    [courseLecturerName, courses],
   );
 
   // Load groups for a course
@@ -319,7 +319,7 @@ export default function AdminGroupsPage() {
         try {
           const res = await fetch(
             `/api/proxy/Group/GetGroupByCourseCode/${encodeURIComponent(
-              courseCode
+              courseCode,
             )}`,
             {
               cache: "no-store",
@@ -329,13 +329,13 @@ export default function AdminGroupsPage() {
                 Pragma: "no-cache",
                 Expires: "0",
               },
-            }
+            },
           );
 
           if (!res.ok) {
             const text = await res.text().catch(() => "");
             throw new Error(
-              `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`
+              `GetGroupByCourseCode failed: ${res.status} ${res.statusText} ${text}`,
             );
           }
 
@@ -346,7 +346,7 @@ export default function AdminGroupsPage() {
           const list = Array.isArray(all)
             ? all.filter(
                 (g: any) =>
-                  (g?.course?.courseCode || g?.courseCode) === courseCode
+                  (g?.course?.courseCode || g?.courseCode) === courseCode,
               )
             : [];
 
@@ -359,7 +359,7 @@ export default function AdminGroupsPage() {
         toast({ title: "Lỗi", description: "Không thể tải danh sách nhóm." });
       }
     },
-    [mapApiGroupToRow, toast, courses, courseLecturerName]
+    [mapApiGroupToRow, toast, courses, courseLecturerName],
   );
 
   React.useEffect(() => {
@@ -380,7 +380,7 @@ export default function AdminGroupsPage() {
           } catch {
             copy[id] = "—";
           }
-        })
+        }),
       );
       setLecturerNames(copy);
     })();
@@ -389,7 +389,7 @@ export default function AdminGroupsPage() {
   // Random Leader cho các nhóm có thành viên nhưng chưa có Leader
   const handleRandomizeLeaders = React.useCallback(async () => {
     const targetGroups = groups.filter(
-      (g) => g.memberCount > 0 && !g.hasLeader
+      (g) => g.memberCount > 0 && !g.hasLeader,
     );
 
     if (targetGroups.length === 0) {
@@ -410,7 +410,7 @@ export default function AdminGroupsPage() {
 
     if (
       !confirm(
-        `Tìm thấy ${targetGroups.length} nhóm chưa có Leader. Bạn có muốn chọn ngẫu nhiên không?`
+        `Tìm thấy ${targetGroups.length} nhóm chưa có Leader. Bạn có muốn chọn ngẫu nhiên không?`,
       )
     )
       return;
@@ -432,7 +432,7 @@ export default function AdminGroupsPage() {
       });
       const results = await Promise.allSettled(promises);
       const successCount = results.filter(
-        (r) => r.status === "fulfilled"
+        (r) => r.status === "fulfilled",
       ).length;
       const failCount = results.length - successCount;
       toast({
@@ -448,7 +448,7 @@ export default function AdminGroupsPage() {
       toast({
         title: "Lỗi",
         description: String(
-          (error as any)?.message || "Có lỗi xảy ra khi random leader."
+          (error as any)?.message || "Có lỗi xảy ra khi random leader.",
         ),
       });
     } finally {
@@ -513,18 +513,18 @@ export default function AdminGroupsPage() {
                     // Use the TeamAllocation API
                     console.log(
                       "🚀 [Allocate Teams] Calling API with courseName:",
-                      selectedCourseCode.toLowerCase()
+                      selectedCourseCode.toLowerCase(),
                     );
                     const response = await fetch(
                       `/api/proxy/api/TeamAllocation/allocate-teams?courseName=${encodeURIComponent(
-                        selectedCourseCode.toLowerCase()
+                        selectedCourseCode.toLowerCase(),
                       )}`,
                       {
                         method: "POST",
                         headers: {
                           "Content-Type": "application/json",
                         },
-                      }
+                      },
                     );
 
                     if (!response.ok) {
@@ -532,7 +532,7 @@ export default function AdminGroupsPage() {
                         .text()
                         .catch(() => "Unknown error");
                       throw new Error(
-                        `Team allocation failed: ${response.status} ${response.statusText} ${errorText}`
+                        `Team allocation failed: ${response.status} ${response.statusText} ${errorText}`,
                       );
                     }
 
@@ -559,13 +559,13 @@ export default function AdminGroupsPage() {
               >
                 Phân bổ tự động
               </Button>
-              <Button
+              {/* <Button
                 variant="outline"
                 onClick={handleRandomizeLeaders}
                 disabled={isRandomizing || !selectedCourseCode}
               >
                 <Shuffle className="w-4 h-4 mr-2" /> Random Leader
-              </Button>
+              </Button> */}
             </div>
 
             {/* Bộ lọc */}
@@ -595,8 +595,8 @@ export default function AdminGroupsPage() {
                       new Set(
                         groups
                           .map((g) => g.lecturerId)
-                          .filter((id: string | undefined) => !!id)
-                      )
+                          .filter((id: string | undefined) => !!id),
+                      ),
                     )
                       .map((id) => String(id))
                       .map((id) => (
@@ -625,7 +625,7 @@ export default function AdminGroupsPage() {
                     <TableHead>Tên nhóm</TableHead>
                     <TableHead>Số lượng</TableHead>
                     <TableHead>Lecturer</TableHead>
-                    <TableHead>Trạng thái</TableHead>
+                    {/* <TableHead>Trạng thái</TableHead> */}
                     <TableHead className="text-right">Hành động</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -634,7 +634,7 @@ export default function AdminGroupsPage() {
                     .filter((g) => {
                       if (statusFilter === "all") return true;
                       const currentCourse = courses.find(
-                        (c) => c.courseCode === g.courseCode
+                        (c) => c.courseCode === g.courseCode,
                       );
                       const courseMaxMembers =
                         currentCourse?.maxMembers || g.maxMembers || 5;
@@ -645,7 +645,7 @@ export default function AdminGroupsPage() {
                     .filter((g) =>
                       mentorFilter === "all"
                         ? true
-                        : g.lecturerId === mentorFilter
+                        : g.lecturerId === mentorFilter,
                     )
                     .map((g) => (
                       <TableRow key={g.id}>
@@ -657,7 +657,7 @@ export default function AdminGroupsPage() {
                               {(() => {
                                 // Lấy maxMembers từ course hiện tại
                                 const currentCourse = courses.find(
-                                  (c) => c.courseCode === g.courseCode
+                                  (c) => c.courseCode === g.courseCode,
                                 );
                                 const maxMembers =
                                   currentCourse?.maxMembers ||
@@ -683,7 +683,7 @@ export default function AdminGroupsPage() {
                               ? lecturerNames[g.lecturerId] || "—"
                               : "—")}
                         </TableCell>
-                        <TableCell>
+                        {/* <TableCell>
                           {(() => {
                             const currentCourse = courses.find(
                               (c) => c.courseCode === g.courseCode
@@ -721,7 +721,7 @@ export default function AdminGroupsPage() {
                               </Badge>
                             );
                           })()}
-                        </TableCell>
+                        </TableCell> */}
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
@@ -729,7 +729,7 @@ export default function AdminGroupsPage() {
                               size="sm"
                               onClick={() => {
                                 const c = courses.find(
-                                  (c) => c.courseCode === g.courseCode
+                                  (c) => c.courseCode === g.courseCode,
                                 );
                                 const courseIdForGroup =
                                   c?.courseId || selectedCourseId;
@@ -741,7 +741,7 @@ export default function AdminGroupsPage() {
                                     courseCode: g.courseCode,
                                     courseId: courseIdForGroup,
                                     lecturerId: g.lecturerId,
-                                  }
+                                  },
                                 );
                                 setEditTarget({
                                   id: g.id,
