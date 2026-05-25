@@ -3,10 +3,6 @@
 import { OpenAPI } from "@/lib/api/generated";
 import { useEffect } from "react";
 
-/**
- * ApiProvider – cấu hình OpenAPI client cho Client Components
- * (Server Action sẽ có config riêng)
- */
 export function ApiProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
